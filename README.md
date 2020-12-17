@@ -9,7 +9,7 @@ peer on the DHT, connect to the peer and prints the output of the
 protocol.
 
 ```
-$ libp2p-lookup --peer-id 12D3KooWQKqane1SqWJNWMQkbia9qiMWXkcHtAdfW5eVF8hbwEDw
+$ libp2p-lookup --network kusama --peer-id 12D3KooWQKqane1SqWJNWMQkbia9qiMWXkcHtAdfW5eVF8hbwEDw
 
 Lookup for peer with id PeerId("12D3KooWQKqane1SqWJNWMQkbia9qiMWXkcHtAdfW5eVF8hbwEDw") succeeded.
 

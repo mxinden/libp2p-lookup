@@ -174,13 +174,14 @@ impl LookupClient {
         for (addr, peer_id) in network.bootnodes() {
             swarm.kademlia.add_address(&peer_id, addr);
         }
-        swarm.kademlia.bootstrap().unwrap();
 
         Ok(LookupClient { swarm })
     }
 
     async fn lookup_peer(&mut self, peer: PeerId) -> Result<Peer, LookupError> {
         let lookup = async {
+            self.swarm.kademlia.get_closest_peers(peer.clone());
+
             loop {
                 match self.next().await.unwrap() {
                     Event::Ping(_) => {}
@@ -208,15 +209,11 @@ impl LookupClient {
                     }
                     Event::Identify(_) => {}
                     Event::Kademlia(KademliaEvent::QueryResult {
-                        result: QueryResult::Bootstrap(Ok(_)),
+                        result: QueryResult::Bootstrap(_),
                         ..
                     }) => {
-                        self.swarm.kademlia.get_closest_peers(peer.clone());
+                        panic!("Unexpected bootstrap.");
                     }
-                    Event::Kademlia(KademliaEvent::QueryResult {
-                        result: QueryResult::Bootstrap(Err(e)),
-                        ..
-                    }) => panic!("Bootstrap failed with {:?}", e),
                     Event::Kademlia(KademliaEvent::QueryResult {
                         result: QueryResult::GetClosestPeers(Ok(GetClosestPeersOk { peers, .. })),
                         ..
@@ -233,7 +230,7 @@ impl LookupClient {
             }
         };
 
-        async_std::future::timeout(std::time::Duration::from_secs(30), lookup)
+        async_std::future::timeout(std::time::Duration::from_secs(10), lookup)
             .await
             .unwrap_or(Err(LookupError::Timeout(
                 self.swarm.addresses_of_peer(&peer),

@@ -170,7 +170,9 @@ impl LookupClient {
                         result: QueryResult::GetClosestPeers(Ok(GetClosestPeersOk { peers, .. })),
                         ..
                     }) => {
-                        assert!(peers.contains(&peer), "Expected to find peer.");
+                        if !peers.contains(&peer) {
+                            return Err(LookupError::FailedToFindPeerOnDHT);
+                        }
                         if !Swarm::is_connected(&mut self.swarm, &peer) {
                             Swarm::dial(&mut self.swarm, &peer).unwrap();
                         }
@@ -191,6 +193,7 @@ impl LookupClient {
 #[derive(Debug)]
 enum LookupError {
     Timeout(Vec<Multiaddr>),
+    FailedToFindPeerOnDHT,
 }
 
 impl Stream for LookupClient {

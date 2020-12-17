@@ -8,6 +8,14 @@ peer on the DHT, connect to the peer and prints the output of the
 [libp2p-identify](https://github.com/libp2p/specs/tree/master/identify)
 protocol.
 
+### Installation
+
+```
+$ cargo install libp2p-lookup
+```
+
+### Usage
+
 ```
 $ libp2p-lookup --network kusama --peer-id 12D3KooWQKqane1SqWJNWMQkbia9qiMWXkcHtAdfW5eVF8hbwEDw
 

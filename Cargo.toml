@@ -3,6 +3,9 @@ name = "libp2p-lookup"
 version = "0.1.0"
 authors = ["Max Inden <mail@max-inden.de>"]
 edition = "2018"
+license = "MIT"
+description = "Lookup a peer by its id."
+repository = "https://github.com/mxinden/libp2p-lookup"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

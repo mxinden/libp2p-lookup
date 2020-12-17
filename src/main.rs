@@ -9,11 +9,11 @@ use libp2p::identify::{Identify, IdentifyEvent, IdentifyInfo};
 use libp2p::identity::Keypair;
 use libp2p::kad::{
     record::store::MemoryStore, GetClosestPeersOk, Kademlia, KademliaConfig, KademliaEvent,
-    QueryId, QueryResult,
+    QueryResult,
 };
 use libp2p::ping::{Ping, PingConfig, PingEvent};
 use libp2p::swarm::{
-    DialError, NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters, SwarmBuilder,
+    NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters, SwarmBuilder,
 };
 use libp2p::{
     dns, mplex, noise, tcp, yamux, InboundUpgradeExt, Multiaddr, NetworkBehaviour,
@@ -160,9 +160,13 @@ impl LookupClient {
                     ..
                 }) => panic!("Bootstrap failed with {:?}", e),
                 Event::Kademlia(KademliaEvent::QueryResult {
-                    result: QueryResult::GetClosestPeers(Ok(GetClosestPeersOk { key, peers })),
+                    result: QueryResult::GetClosestPeers(Ok(GetClosestPeersOk { peers, .. })),
                     ..
                 }) => {
+                    assert!(peers.contains(&peer), "Expected to find peer.");
+                    if !Swarm::is_connected(&mut self.swarm, &peer) {
+                        Swarm::dial(&mut self.swarm, &peer).unwrap();
+                    }
                     for peer_id in peers {
                         self.peers.entry(peer_id).or_default();
                     }

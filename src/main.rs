@@ -221,7 +221,7 @@ impl LookupClient {
                         if !peers.contains(&peer) {
                             return Err(LookupError::FailedToFindPeerOnDHT);
                         }
-                        if !Swarm::is_connected(&mut self.swarm, &peer) {
+                        if !Swarm::is_connected(&self.swarm, &peer) {
                             Swarm::dial(&mut self.swarm, &peer).unwrap();
                         }
                     }
@@ -232,7 +232,7 @@ impl LookupClient {
 
         async_std::future::timeout(std::time::Duration::from_secs(10), lookup)
             .await
-            .unwrap_or(Err(LookupError::Timeout(
+            .unwrap_or_else(|_| Err(LookupError::Timeout(
                 self.swarm.addresses_of_peer(&peer),
             )))
     }
@@ -383,8 +383,8 @@ fn build_transport(keypair: Keypair, noise_legacy: bool) -> Boxed<(PeerId, Strea
         yamux_config.set_window_update_mode(yamux::WindowUpdateMode::on_read());
 
         core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
-            .map_inbound(move |muxer| core::muxing::StreamMuxerBox::new(muxer))
-            .map_outbound(move |muxer| core::muxing::StreamMuxerBox::new(muxer))
+            .map_inbound(core::muxing::StreamMuxerBox::new)
+            .map_outbound(core::muxing::StreamMuxerBox::new)
     };
 
     transport

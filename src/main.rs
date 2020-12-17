@@ -51,17 +51,20 @@ async fn main() {
     println!("{}", peer);
 }
 
-fn print_key(k: &str, f: &mut std::fmt::Formatter<'_>)-> std::fmt::Result {
+fn print_key(k: &str, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     writeln!(f, "{}", Style::new().bold().paint(k))
 }
 
-fn print_key_value<V: std::fmt::Debug>(k: &str, v: V, f: &mut std::fmt::Formatter<'_>)-> std::fmt::Result {
+fn print_key_value<V: std::fmt::Debug>(
+    k: &str,
+    v: V,
+    f: &mut std::fmt::Formatter<'_>,
+) -> std::fmt::Result {
     writeln!(f, "{}{:?}", Style::new().bold().paint(k), v)
 }
 
 pub struct LookupClient {
     swarm: Swarm<LookupBehaviour>,
-    bootstrapped: bool,
 }
 
 struct Peer {
@@ -122,19 +125,12 @@ impl LookupClient {
         );
         swarm.kademlia.bootstrap().unwrap();
 
-        Ok(LookupClient {
-            swarm,
-            bootstrapped: false,
-        })
+        Ok(LookupClient { swarm })
     }
 
     async fn lookup_peer(&mut self, peer: PeerId) -> Result<Peer, LookupError> {
         let lookup = async {
             loop {
-                if self.bootstrapped {
-                    self.swarm.kademlia.get_closest_peers(peer.clone());
-                }
-
                 match self.next().await.unwrap() {
                     Event::Ping(_) => {}
                     Event::Identify(IdentifyEvent::Received {
@@ -163,7 +159,9 @@ impl LookupClient {
                     Event::Kademlia(KademliaEvent::QueryResult {
                         result: QueryResult::Bootstrap(Ok(_)),
                         ..
-                    }) => self.bootstrapped = true,
+                    }) => {
+                        self.swarm.kademlia.get_closest_peers(peer.clone());
+                    }
                     Event::Kademlia(KademliaEvent::QueryResult {
                         result: QueryResult::Bootstrap(Err(e)),
                         ..

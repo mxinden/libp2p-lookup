@@ -45,11 +45,16 @@ async fn main() {
 
     let peer = client.lookup_peer(opt.peer_id.clone()).await;
 
+    println!();
     println!("Lookup for peer with id {:?} succeeded.", opt.peer_id);
     println!();
-    peer.protocol_version.map(|v| print_key_value("Protocol version:\t", v));
-    peer.agent_version.map(|v| print_key_value("Agent version:\t\t", v));
-    peer.observed_addr.map(|a| print_key_value("Observed address:\t", a));
+
+    peer.protocol_version
+        .map(|v| print_key_value("Protocol version:\t", v));
+    peer.agent_version
+        .map(|v| print_key_value("Agent version:\t\t", v));
+    peer.observed_addr
+        .map(|a| print_key_value("Observed address:\t", a));
     if !peer.listen_addrs.is_empty() {
         print_key("Listen addresses:");
         for addr in peer.listen_addrs {
@@ -141,16 +146,18 @@ impl LookupClient {
                             ..
                         },
                     observed_addr,
-                }) => if peer_id == peer {
-                    return Peer {
-                        protocol_version: Some(protocol_version),
-                        agent_version: Some(agent_version),
-                        listen_addrs: listen_addrs,
-                        protocols: protocols,
-                        observed_addr: Some(observed_addr),
+                }) => {
+                    if peer_id == peer {
+                        return Peer {
+                            protocol_version: Some(protocol_version),
+                            agent_version: Some(agent_version),
+                            listen_addrs: listen_addrs,
+                            protocols: protocols,
+                            observed_addr: Some(observed_addr),
+                        };
                     }
-                },
-                Event::Identify(_) => {},
+                }
+                Event::Identify(_) => {}
                 Event::Kademlia(KademliaEvent::QueryResult {
                     result: QueryResult::Bootstrap(Ok(_)),
                     ..

@@ -4,11 +4,11 @@
 
 Small binary that takes as input a [peer
 id](https://docs.libp2p.io/concepts/peer-id/), tries to find the corresponding
-peer on the DHT, connect to the peer and print the output of the
+peer on the DHT, connect to the peer and prints the output of the
 [libp2p-identify](https://github.com/libp2p/specs/tree/master/identify)
 protocol.
 
-```bash
+```
 $ libp2p-lookup --peer-id 12D3KooWQKqane1SqWJNWMQkbia9qiMWXkcHtAdfW5eVF8hbwEDw
 
 Lookup for peer with id PeerId("12D3KooWQKqane1SqWJNWMQkbia9qiMWXkcHtAdfW5eVF8hbwEDw") succeeded.

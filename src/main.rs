@@ -13,13 +13,13 @@ use libp2p::kad::{
 };
 use libp2p::ping::{Ping, PingConfig, PingEvent};
 use libp2p::swarm::{
-    NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters, SwarmBuilder,
+    NetworkBehaviour, NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters,
+    SwarmBuilder,
 };
 use libp2p::{
     dns, mplex, noise, tcp, yamux, InboundUpgradeExt, Multiaddr, NetworkBehaviour,
     OutboundUpgradeExt, PeerId, Swarm,
 };
-use std::collections::HashMap;
 use std::error::Error;
 use std::io;
 use std::pin::Pin;
@@ -38,12 +38,11 @@ struct Opt {
 #[async_std::main]
 async fn main() {
     env_logger::init();
-
     let opt = Opt::from_args();
 
     let mut client = LookupClient::new().unwrap();
 
-    let peer = client.lookup_peer(opt.peer_id.clone()).await;
+    let peer = client.lookup_peer(opt.peer_id.clone()).await.unwrap();
 
     println!();
     println!("Lookup for peer with id {:?} succeeded.", opt.peer_id);
@@ -80,7 +79,6 @@ fn print_key_value<V: std::fmt::Debug>(k: &str, v: V) {
 pub struct LookupClient {
     swarm: Swarm<LookupBehaviour>,
     bootstrapped: bool,
-    peers: HashMap<PeerId, Peer>,
 }
 
 #[derive(Default)]
@@ -123,65 +121,74 @@ impl LookupClient {
         Ok(LookupClient {
             swarm,
             bootstrapped: false,
-            peers: Default::default(),
         })
     }
 
-    async fn lookup_peer(&mut self, peer: PeerId) -> Peer {
-        loop {
-            if self.bootstrapped {
-                self.swarm.kademlia.get_closest_peers(peer.clone());
-            }
+    async fn lookup_peer(&mut self, peer: PeerId) -> Result<Peer, LookupError> {
+        let lookup = async {
+            loop {
+                if self.bootstrapped {
+                    self.swarm.kademlia.get_closest_peers(peer.clone());
+                }
 
-            match self.next().await.unwrap() {
-                Event::Ping(_) => {}
-                Event::Identify(IdentifyEvent::Received {
-                    peer_id,
-                    info:
-                        IdentifyInfo {
-                            protocol_version,
-                            agent_version,
-                            listen_addrs,
-                            protocols,
-                            ..
-                        },
-                    observed_addr,
-                }) => {
-                    if peer_id == peer {
-                        return Peer {
-                            protocol_version: Some(protocol_version),
-                            agent_version: Some(agent_version),
-                            listen_addrs: listen_addrs,
-                            protocols: protocols,
-                            observed_addr: Some(observed_addr),
-                        };
+                match self.next().await.unwrap() {
+                    Event::Ping(_) => {}
+                    Event::Identify(IdentifyEvent::Received {
+                        peer_id,
+                        info:
+                            IdentifyInfo {
+                                protocol_version,
+                                agent_version,
+                                listen_addrs,
+                                protocols,
+                                ..
+                            },
+                        observed_addr,
+                    }) => {
+                        if peer_id == peer {
+                            return Ok(Peer {
+                                protocol_version: Some(protocol_version),
+                                agent_version: Some(agent_version),
+                                listen_addrs: listen_addrs,
+                                protocols: protocols,
+                                observed_addr: Some(observed_addr),
+                            });
+                        }
                     }
+                    Event::Identify(_) => {}
+                    Event::Kademlia(KademliaEvent::QueryResult {
+                        result: QueryResult::Bootstrap(Ok(_)),
+                        ..
+                    }) => self.bootstrapped = true,
+                    Event::Kademlia(KademliaEvent::QueryResult {
+                        result: QueryResult::Bootstrap(Err(e)),
+                        ..
+                    }) => panic!("Bootstrap failed with {:?}", e),
+                    Event::Kademlia(KademliaEvent::QueryResult {
+                        result: QueryResult::GetClosestPeers(Ok(GetClosestPeersOk { peers, .. })),
+                        ..
+                    }) => {
+                        assert!(peers.contains(&peer), "Expected to find peer.");
+                        if !Swarm::is_connected(&mut self.swarm, &peer) {
+                            Swarm::dial(&mut self.swarm, &peer).unwrap();
+                        }
+                    }
+                    Event::Kademlia(_) => {}
                 }
-                Event::Identify(_) => {}
-                Event::Kademlia(KademliaEvent::QueryResult {
-                    result: QueryResult::Bootstrap(Ok(_)),
-                    ..
-                }) => self.bootstrapped = true,
-                Event::Kademlia(KademliaEvent::QueryResult {
-                    result: QueryResult::Bootstrap(Err(e)),
-                    ..
-                }) => panic!("Bootstrap failed with {:?}", e),
-                Event::Kademlia(KademliaEvent::QueryResult {
-                    result: QueryResult::GetClosestPeers(Ok(GetClosestPeersOk { peers, .. })),
-                    ..
-                }) => {
-                    assert!(peers.contains(&peer), "Expected to find peer.");
-                    if !Swarm::is_connected(&mut self.swarm, &peer) {
-                        Swarm::dial(&mut self.swarm, &peer).unwrap();
-                    }
-                    for peer_id in peers {
-                        self.peers.entry(peer_id).or_default();
-                    }
-                }
-                Event::Kademlia(_) => {}
             }
-        }
+        };
+
+        async_std::future::timeout(std::time::Duration::from_secs(30), lookup)
+            .await
+            .unwrap_or(Err(LookupError::Timeout(
+                self.swarm.addresses_of_peer(&peer),
+            )))
     }
+}
+
+#[derive(Debug)]
+enum LookupError {
+    Timeout(Vec<Multiaddr>),
 }
 
 impl Stream for LookupClient {

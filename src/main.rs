@@ -33,6 +33,65 @@ use structopt::StructOpt;
 struct Opt {
     #[structopt(long)]
     peer_id: PeerId,
+    #[structopt(long)]
+    network: Network,
+}
+
+#[derive(Debug)]
+enum Network {
+    Kusama,
+    Polkadot,
+    Ipfs,
+}
+
+impl FromStr for Network {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "kusama" => Ok(Self::Kusama),
+            "polkadot" => Ok(Self::Polkadot),
+            "ipfs" => Ok(Self::Ipfs),
+            n => Err(format!("Network '{}' not supported.", n)),
+        }
+    }
+}
+
+impl Network {
+    #[rustfmt::skip]
+    fn bootnodes(&self) -> Vec<(Multiaddr, PeerId)> {
+        match self {
+            Network::Kusama => {
+                vec![
+                    ("/dns/p2p.cc3-0.kusama.network/tcp/30100".parse().unwrap(), FromStr::from_str("12D3KooWDgtynm4S9M3m6ZZhXYu2RrWKdvkCSScc25xKDVSg1Sjd").unwrap()),
+                    ("/dns/p2p.cc3-1.kusama.network/tcp/30100".parse().unwrap(), FromStr::from_str("12D3KooWNpGriWPmf621Lza9UWU9eLLBdCFaErf6d4HSK7Bcqnv4").unwrap()),
+                    ("/dns/p2p.cc3-2.kusama.network/tcp/30100".parse().unwrap(), FromStr::from_str("12D3KooWLmLiB4AenmN2g2mHbhNXbUcNiGi99sAkSk1kAQedp8uE").unwrap()),
+                    ("/dns/p2p.cc3-3.kusama.network/tcp/30100".parse().unwrap(), FromStr::from_str("12D3KooWEGHw84b4hfvXEfyq4XWEmWCbRGuHMHQMpby4BAtZ4xJf").unwrap()),
+                    ("/dns/p2p.cc3-4.kusama.network/tcp/30100".parse().unwrap(), FromStr::from_str("12D3KooWF9KDPRMN8WpeyXhEeURZGP8Dmo7go1tDqi7hTYpxV9uW").unwrap()),
+                    ("/dns/p2p.cc3-5.kusama.network/tcp/30100".parse().unwrap(), FromStr::from_str("12D3KooWDiwMeqzvgWNreS9sV1HW3pZv1PA7QGA7HUCo7FzN5gcA").unwrap()),
+                    ("/dns/kusama-bootnode-0.paritytech.net/tcp/30333".parse().unwrap(), FromStr::from_str("12D3KooWSueCPH3puP2PcvqPJdNaDNF3jMZjtJtDiSy35pWrbt5h").unwrap()),
+                    ("/dns/kusama-bootnode-1.paritytech.net/tcp/30333".parse().unwrap(), FromStr::from_str("12D3KooWQKqane1SqWJNWMQkbia9qiMWXkcHtAdfW5eVF8hbwEDw").unwrap())
+                ]
+            }
+            Network::Polkadot => {
+                vec![
+                    ("/dns/p2p.cc1-0.polkadot.network/tcp/30100".parse().unwrap(), FromStr::from_str("12D3KooWEdsXX9657ppNqqrRuaCHFvuNemasgU5msLDwSJ6WqsKc").unwrap()),
+                    ("/dns/p2p.cc1-1.polkadot.network/tcp/30100".parse().unwrap(), FromStr::from_str("12D3KooWAtx477KzC8LwqLjWWUG6WF4Gqp2eNXmeqAG98ehAMWYH").unwrap()),
+                    ("/dns/p2p.cc1-2.polkadot.network/tcp/30100".parse().unwrap(), FromStr::from_str("12D3KooWAGCCPZbr9UWGXPtBosTZo91Hb5M3hU8v6xbKgnC5LVao").unwrap()),
+                    ("/dns/p2p.cc1-3.polkadot.network/tcp/30100".parse().unwrap(), FromStr::from_str("12D3KooWJ4eyPowiVcPU46pXuE2cDsiAmuBKXnFcFPapm4xKFdMJ").unwrap()),
+                    ("/dns/p2p.cc1-4.polkadot.network/tcp/30100".parse().unwrap(), FromStr::from_str("12D3KooWNMUcqwSj38oEq1zHeGnWKmMvrCFnpMftw7JzjAtRj2rU").unwrap()),
+                    ("/dns/p2p.cc1-5.polkadot.network/tcp/30100".parse().unwrap(), FromStr::from_str("12D3KooWDs6LnpmWDWgZyGtcLVr3E75CoBxzg1YZUPL5Bb1zz6fM").unwrap()),
+                    ("/dns/cc1-0.parity.tech/tcp/30333".parse().unwrap(), FromStr::from_str("12D3KooWSz8r2WyCdsfWHgPyvD8GKQdJ1UAiRmrcrs8sQB3fe2KU").unwrap()),
+                    ("/dns/cc1-1.parity.tech/tcp/30333".parse().unwrap(), FromStr::from_str("12D3KooWFN2mhgpkJsDBuNuE5427AcDrsib8EoqGMZmkxWwx3Md4").unwrap()),
+                ]
+            }
+            Network::Ipfs => {
+                vec![
+                    ("/ip4/104.131.131.82/tcp/4001".parse().unwrap(), FromStr::from_str("QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ").unwrap()),
+                ]
+            }
+        }
+    }
 }
 
 #[async_std::main]
@@ -40,19 +99,23 @@ async fn main() {
     env_logger::init();
     let opt = Opt::from_args();
 
-    let mut client = LookupClient::new().unwrap();
+    let mut client = LookupClient::new(opt.network).unwrap();
 
-    let peer = client.lookup_peer(opt.peer_id.clone()).await.unwrap();
-
-    println!();
-    println!("Lookup for peer with id {:?} succeeded.", opt.peer_id);
-    println!();
-
-    println!("{}", peer);
+    match client.lookup_peer(opt.peer_id.clone()).await {
+        Ok(peer) => {
+            println!("Lookup for peer with id {:?} succeeded.", opt.peer_id);
+            println!("\n{}", peer);
+        }
+        Err(e) => {
+            eprintln!("Lookup for peer with id {:?} failed.", opt.peer_id);
+            eprintln!("\n{:?}", e);
+            std::process::exit(1);
+        }
+    }
 }
 
 fn print_key(k: &str, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    writeln!(f, "{}", Style::new().bold().paint(k))
+    writeln!(f, "{}:", Style::new().bold().paint(k))
 }
 
 fn print_key_value<V: std::fmt::Debug>(
@@ -60,7 +123,7 @@ fn print_key_value<V: std::fmt::Debug>(
     v: V,
     f: &mut std::fmt::Formatter<'_>,
 ) -> std::fmt::Result {
-    writeln!(f, "{}{:?}", Style::new().bold().paint(k), v)
+    writeln!(f, "{}: {:?}", Style::new().bold().paint(k), v)
 }
 
 pub struct LookupClient {
@@ -77,17 +140,17 @@ struct Peer {
 
 impl std::fmt::Display for Peer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        print_key_value("Protocol version:\t", self.protocol_version.clone(), f)?;
-        print_key_value("Agent version:\t\t", self.agent_version.clone(), f)?;
-        print_key_value("Observed address:\t", self.observed_addr.clone(), f)?;
+        print_key_value("Protocol version", self.protocol_version.clone(), f)?;
+        print_key_value("Agent version", self.agent_version.clone(), f)?;
+        print_key_value("Observed address", self.observed_addr.clone(), f)?;
         if !self.listen_addrs.is_empty() {
-            print_key("Listen addresses:", f)?;
+            print_key("Listen addresses", f)?;
             for addr in &self.listen_addrs {
                 println!("\t- {:?}", addr);
             }
         }
         if !self.protocols.is_empty() {
-            print_key("Protocols:", f)?;
+            print_key("Protocols", f)?;
             for protocol in &self.protocols {
                 println!("\t- {:?}", protocol);
             }
@@ -98,7 +161,7 @@ impl std::fmt::Display for Peer {
 }
 
 impl LookupClient {
-    pub fn new() -> Result<LookupClient, Box<dyn Error>> {
+    fn new(network: Network) -> Result<LookupClient, Box<dyn Error>> {
         // Create a random key for ourselves.
         let local_key = Keypair::generate_ed25519();
         let local_peer_id = PeerId::from(local_key.public());
@@ -108,21 +171,9 @@ impl LookupClient {
         let transport = build_transport(local_key, true);
         let mut swarm = SwarmBuilder::new(transport, behaviour, local_peer_id).build();
 
-        // for mut bootnode in config.bootnodes {
-        //     let bootnode_peer_id = if let Protocol::P2p(hash) = bootnode.pop().unwrap() {
-        //         PeerId::from_multihash(hash).unwrap()
-        //     } else {
-        //         panic!("expected peer id");
-        //     };
-        //
-        // }
-
-        swarm.kademlia.add_address(
-            &FromStr::from_str("12D3KooWSueCPH3puP2PcvqPJdNaDNF3jMZjtJtDiSy35pWrbt5h").unwrap(),
-            "/dns/kusama-bootnode-0.paritytech.net/tcp/30333"
-                .parse()
-                .unwrap(),
-        );
+        for (addr, peer_id) in network.bootnodes() {
+            swarm.kademlia.add_address(&peer_id, addr);
+        }
         swarm.kademlia.bootstrap().unwrap();
 
         Ok(LookupClient { swarm })

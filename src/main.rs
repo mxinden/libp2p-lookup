@@ -48,32 +48,15 @@ async fn main() {
     println!("Lookup for peer with id {:?} succeeded.", opt.peer_id);
     println!();
 
-    peer.protocol_version
-        .map(|v| print_key_value("Protocol version:\t", v));
-    peer.agent_version
-        .map(|v| print_key_value("Agent version:\t\t", v));
-    peer.observed_addr
-        .map(|a| print_key_value("Observed address:\t", a));
-    if !peer.listen_addrs.is_empty() {
-        print_key("Listen addresses:");
-        for addr in peer.listen_addrs {
-            println!("\t- {:?}", addr);
-        }
-    }
-    if !peer.protocols.is_empty() {
-        print_key("Protocols:");
-        for protocol in peer.protocols {
-            println!("\t- {:?}", protocol);
-        }
-    }
+    println!("{}", peer);
 }
 
-fn print_key(k: &str) {
-    println!("{}", Style::new().bold().paint(k));
+fn print_key(k: &str, f: &mut std::fmt::Formatter<'_>)-> std::fmt::Result {
+    writeln!(f, "{}", Style::new().bold().paint(k))
 }
 
-fn print_key_value<V: std::fmt::Debug>(k: &str, v: V) {
-    println!("{}{:?}", Style::new().bold().paint(k), v);
+fn print_key_value<V: std::fmt::Debug>(k: &str, v: V, f: &mut std::fmt::Formatter<'_>)-> std::fmt::Result {
+    writeln!(f, "{}{:?}", Style::new().bold().paint(k), v)
 }
 
 pub struct LookupClient {
@@ -81,13 +64,34 @@ pub struct LookupClient {
     bootstrapped: bool,
 }
 
-#[derive(Default)]
 struct Peer {
-    protocol_version: Option<String>,
-    agent_version: Option<String>,
+    protocol_version: String,
+    agent_version: String,
     listen_addrs: Vec<Multiaddr>,
     protocols: Vec<String>,
-    observed_addr: Option<Multiaddr>,
+    observed_addr: Multiaddr,
+}
+
+impl std::fmt::Display for Peer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        print_key_value("Protocol version:\t", self.protocol_version.clone(), f)?;
+        print_key_value("Agent version:\t\t", self.agent_version.clone(), f)?;
+        print_key_value("Observed address:\t", self.observed_addr.clone(), f)?;
+        if !self.listen_addrs.is_empty() {
+            print_key("Listen addresses:", f)?;
+            for addr in &self.listen_addrs {
+                println!("\t- {:?}", addr);
+            }
+        }
+        if !self.protocols.is_empty() {
+            print_key("Protocols:", f)?;
+            for protocol in &self.protocols {
+                println!("\t- {:?}", protocol);
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl LookupClient {
@@ -147,11 +151,11 @@ impl LookupClient {
                     }) => {
                         if peer_id == peer {
                             return Ok(Peer {
-                                protocol_version: Some(protocol_version),
-                                agent_version: Some(agent_version),
-                                listen_addrs: listen_addrs,
-                                protocols: protocols,
-                                observed_addr: Some(observed_addr),
+                                protocol_version,
+                                agent_version,
+                                listen_addrs,
+                                protocols,
+                                observed_addr,
                             });
                         }
                     }

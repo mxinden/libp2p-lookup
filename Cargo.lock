@@ -1060,7 +1060,7 @@ dependencies = [
 
 [[package]]
 name = "libp2p-lookup"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ansi_term 0.12.1",
  "async-std",

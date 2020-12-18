@@ -75,7 +75,7 @@ impl Network {
             }
             Network::Polkadot => {
                 vec![
-                    ("/dns/p2p.cc1-0.polkadot.network/tcp/30100".parse().unwrap(), FromStr::from_str("12D3KooWEdsXX9657ppNqqrRuaCHFvuNemasgU5msLDwSJ6WqsKc").unwrap()),
+                    // ("/dns/p2p.cc1-0.polkadot.network/tcp/30100".parse().unwrap(), FromStr::from_str("12D3KooWEdsXX9657ppNqqrRuaCHFvuNemasgU5msLDwSJ6WqsKc").unwrap()),
                     ("/dns/p2p.cc1-1.polkadot.network/tcp/30100".parse().unwrap(), FromStr::from_str("12D3KooWAtx477KzC8LwqLjWWUG6WF4Gqp2eNXmeqAG98ehAMWYH").unwrap()),
                     ("/dns/p2p.cc1-2.polkadot.network/tcp/30100".parse().unwrap(), FromStr::from_str("12D3KooWAGCCPZbr9UWGXPtBosTZo91Hb5M3hU8v6xbKgnC5LVao").unwrap()),
                     ("/dns/p2p.cc1-3.polkadot.network/tcp/30100".parse().unwrap(), FromStr::from_str("12D3KooWJ4eyPowiVcPU46pXuE2cDsiAmuBKXnFcFPapm4xKFdMJ").unwrap()),
@@ -90,6 +90,14 @@ impl Network {
                     ("/ip4/104.131.131.82/tcp/4001".parse().unwrap(), FromStr::from_str("QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ").unwrap()),
                 ]
             }
+        }
+    }
+
+    fn protocol(&self) -> Option<String> {
+        match self {
+            Network::Kusama => Some("/ksmcc3/kad".to_string()),
+            Network::Polkadot => Some("/dot/kad".to_string()),
+            Network::Ipfs => None,
         }
     }
 }
@@ -166,7 +174,8 @@ impl LookupClient {
         let local_key = Keypair::generate_ed25519();
         let local_peer_id = PeerId::from(local_key.public());
 
-        let behaviour = LookupBehaviour::new(local_key.clone(), Some("/ksmcc3/kad".to_string()))?;
+        let protocol = network.protocol();
+        let behaviour = LookupBehaviour::new(local_key.clone(), protocol)?;
         // TODO: Don't use legacy for noise when connecting to IPFS.
         let transport = build_transport(local_key, true);
         let mut swarm = SwarmBuilder::new(transport, behaviour, local_peer_id).build();
@@ -230,7 +239,7 @@ impl LookupClient {
             }
         };
 
-        async_std::future::timeout(std::time::Duration::from_secs(10), lookup)
+        async_std::future::timeout(std::time::Duration::from_secs(20), lookup)
             .await
             .unwrap_or_else(|_| Err(LookupError::Timeout(
                 self.swarm.addresses_of_peer(&peer),

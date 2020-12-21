@@ -1,7 +1,5 @@
 # libp2p-lookup
 
-**Work in progress.**
-
 Small binary that takes as input a [peer
 id](https://docs.libp2p.io/concepts/peer-id/), tries to find the corresponding
 peer on the DHT, connect to the peer and prints the output of the

@@ -241,9 +241,7 @@ impl LookupClient {
 
         async_std::future::timeout(std::time::Duration::from_secs(20), lookup)
             .await
-            .unwrap_or_else(|_| Err(LookupError::Timeout(
-                self.swarm.addresses_of_peer(&peer),
-            )))
+            .unwrap_or_else(|_| Err(LookupError::Timeout(self.swarm.addresses_of_peer(&peer))))
     }
 }
 

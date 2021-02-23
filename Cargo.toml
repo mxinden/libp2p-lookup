@@ -12,7 +12,7 @@ repository = "https://github.com/mxinden/libp2p-lookup"
 [dependencies]
 libp2p = { version = "0.35.0", default-features = false, features = ["dns", "noise", "tcp-async-io", "yamux", "identify", "kad", "ping", "mplex"] }
 structopt = "0.3.21"
-futures = "0.3.12"
+futures = "0.3.13"
 env_logger = "0.8.3"
 async-std = { version = "1.9.0", features = ["attributes"] }
 ansi_term = "0.12.1"

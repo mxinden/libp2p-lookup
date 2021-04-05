@@ -12,10 +12,7 @@ use libp2p::kad::{
     QueryResult,
 };
 use libp2p::ping::{Ping, PingConfig, PingEvent};
-use libp2p::swarm::{
-    NetworkBehaviour, NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters,
-    SwarmBuilder,
-};
+use libp2p::swarm::{NetworkBehaviour, SwarmBuilder};
 use libp2p::{
     dns, mplex, noise, tcp, yamux, InboundUpgradeExt, Multiaddr, NetworkBehaviour,
     OutboundUpgradeExt, PeerId, Swarm,
@@ -271,15 +268,30 @@ pub enum Event {
     Kademlia(KademliaEvent),
 }
 
+impl From<PingEvent> for Event {
+    fn from(e: PingEvent) -> Self {
+        Event::Ping(e)
+    }
+}
+
+impl From<IdentifyEvent> for Event {
+    fn from(e: IdentifyEvent) -> Self {
+        Event::Identify(e)
+    }
+}
+
+impl From<KademliaEvent> for Event {
+    fn from(e: KademliaEvent) -> Self {
+        Event::Kademlia(e)
+    }
+}
+
 #[derive(NetworkBehaviour)]
-#[behaviour(out_event = "Event", poll_method = "poll")]
+#[behaviour(out_event = "Event", event_process = false)]
 struct LookupBehaviour {
     pub(crate) kademlia: Kademlia<MemoryStore>,
     pub(crate) ping: Ping,
     pub(crate) identify: Identify,
-
-    #[behaviour(ignore)]
-    event_buffer: Vec<Event>,
 }
 
 impl LookupBehaviour {
@@ -304,41 +316,7 @@ impl LookupBehaviour {
             kademlia,
             ping,
             identify,
-
-            event_buffer: Vec::new(),
         })
-    }
-
-    fn poll<TEv>(
-        &mut self,
-        _: &mut Context,
-        _: &mut impl PollParameters,
-    ) -> Poll<NetworkBehaviourAction<TEv, Event>> {
-        if !self.event_buffer.is_empty() {
-            return Poll::Ready(NetworkBehaviourAction::GenerateEvent(
-                self.event_buffer.remove(0),
-            ));
-        }
-
-        Poll::Pending
-    }
-}
-
-impl NetworkBehaviourEventProcess<PingEvent> for LookupBehaviour {
-    fn inject_event(&mut self, event: PingEvent) {
-        self.event_buffer.push(Event::Ping(event));
-    }
-}
-
-impl NetworkBehaviourEventProcess<IdentifyEvent> for LookupBehaviour {
-    fn inject_event(&mut self, event: IdentifyEvent) {
-        self.event_buffer.push(Event::Identify(event));
-    }
-}
-
-impl NetworkBehaviourEventProcess<KademliaEvent> for LookupBehaviour {
-    fn inject_event(&mut self, event: KademliaEvent) {
-        self.event_buffer.push(Event::Kademlia(event));
     }
 }
 

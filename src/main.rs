@@ -1,5 +1,4 @@
 use ansi_term::Style;
-use futures::stream::{Stream, StreamExt};
 use libp2p::core;
 use libp2p::core::either::EitherOutput;
 use libp2p::core::muxing::StreamMuxerBox;
@@ -19,9 +18,7 @@ use libp2p::{
 };
 use std::error::Error;
 use std::io;
-use std::pin::Pin;
 use std::str::FromStr;
-use std::task::{Context, Poll};
 use std::time::Duration;
 use structopt::StructOpt;
 
@@ -189,7 +186,7 @@ impl LookupClient {
             self.swarm.kademlia.get_closest_peers(peer.clone());
 
             loop {
-                match self.next().await.unwrap() {
+                match self.swarm.next().await {
                     Event::Ping(_) => {}
                     Event::Identify(IdentifyEvent::Received {
                         peer_id,
@@ -246,19 +243,6 @@ impl LookupClient {
 enum LookupError {
     Timeout(Vec<Multiaddr>),
     FailedToFindPeerOnDHT,
-}
-
-impl Stream for LookupClient {
-    type Item = Event;
-    fn poll_next(mut self: Pin<&mut Self>, ctx: &mut Context) -> Poll<Option<Self::Item>> {
-        match self.swarm.poll_next_unpin(ctx) {
-            Poll::Ready(Some(event)) => return Poll::Ready(Some(event)),
-            Poll::Ready(None) => return Poll::Ready(None),
-            Poll::Pending => {}
-        }
-
-        Poll::Pending
-    }
 }
 
 #[derive(Debug)]

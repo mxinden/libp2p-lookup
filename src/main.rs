@@ -1,10 +1,11 @@
 use ansi_term::Style;
+use futures::executor::block_on;
 use libp2p::core;
 use libp2p::core::either::EitherOutput;
 use libp2p::core::muxing::StreamMuxerBox;
 use libp2p::core::transport::{Boxed, Transport};
 use libp2p::core::upgrade;
-use libp2p::identify::{Identify, IdentifyEvent, IdentifyInfo};
+use libp2p::identify::{Identify, IdentifyConfig, IdentifyEvent, IdentifyInfo};
 use libp2p::identity::Keypair;
 use libp2p::kad::{
     record::store::MemoryStore, GetClosestPeersOk, Kademlia, KademliaConfig, KademliaEvent,
@@ -175,7 +176,7 @@ impl LookupClient {
         let mut swarm = SwarmBuilder::new(transport, behaviour, local_peer_id).build();
 
         for (addr, peer_id) in network.bootnodes() {
-            swarm.kademlia.add_address(&peer_id, addr);
+            swarm.behaviour_mut().kademlia.add_address(&peer_id, addr);
         }
 
         Ok(LookupClient { swarm })
@@ -183,7 +184,10 @@ impl LookupClient {
 
     async fn lookup_peer(&mut self, peer: PeerId) -> Result<Peer, LookupError> {
         let lookup = async {
-            self.swarm.kademlia.get_closest_peers(peer.clone());
+            self.swarm
+                .behaviour_mut()
+                .kademlia
+                .get_closest_peers(peer.clone());
 
             loop {
                 match self.swarm.next().await {
@@ -196,9 +200,9 @@ impl LookupClient {
                                 agent_version,
                                 listen_addrs,
                                 protocols,
+                                observed_addr,
                                 ..
                             },
-                        observed_addr,
                     }) => {
                         if peer_id == peer {
                             return Ok(Peer {
@@ -235,7 +239,11 @@ impl LookupClient {
 
         async_std::future::timeout(std::time::Duration::from_secs(20), lookup)
             .await
-            .unwrap_or_else(|_| Err(LookupError::Timeout(self.swarm.addresses_of_peer(&peer))))
+            .unwrap_or_else(|_| {
+                Err(LookupError::Timeout(
+                    self.swarm.behaviour_mut().addresses_of_peer(&peer),
+                ))
+            })
     }
 }
 
@@ -294,7 +302,9 @@ impl LookupBehaviour {
 
         let user_agent = "substrate-node/v2.0.0-e3245d49d-x86_64-linux-gnu (unknown)".to_string();
         let proto_version = "/substrate/1.0".to_string();
-        let identify = Identify::new(proto_version, user_agent, local_key.public());
+        let identify = Identify::new(
+            IdentifyConfig::new(proto_version, local_key.public()).with_agent_version(user_agent),
+        );
 
         Ok(LookupBehaviour {
             kademlia,
@@ -306,7 +316,7 @@ impl LookupBehaviour {
 
 fn build_transport(keypair: Keypair, noise_legacy: bool) -> Boxed<(PeerId, StreamMuxerBox)> {
     let tcp = tcp::TcpConfig::new().nodelay(true);
-    let transport = dns::DnsConfig::new(tcp).unwrap();
+    let transport = block_on(dns::DnsConfig::system(tcp)).unwrap();
 
     let authentication_config = {
         let noise_keypair_legacy = noise::Keypair::<noise::X25519>::new()

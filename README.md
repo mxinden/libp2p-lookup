@@ -1,10 +1,10 @@
 # libp2p-lookup
 
-Small binary that takes as input a [peer
-id](https://docs.libp2p.io/concepts/peer-id/), tries to find the corresponding
-peer on the DHT, connect to the peer and prints the output of the
-[libp2p-identify](https://github.com/libp2p/specs/tree/master/identify)
-protocol.
+Small helper tool that takes as input a [peer ID][peer-id] or
+[address][multiaddr] and prints the output of the [libp2p-identify] protocol.
+When provided with a peer ID, the address is looked up on the DHT before
+connecting to the node. When provided with an address, the connection is
+established right away.
 
 ### Installation
 
@@ -15,7 +15,7 @@ $ cargo install libp2p-lookup
 ### Usage
 
 ```
-$ libp2p-lookup --network kusama --peer-id 12D3KooWQKqane1SqWJNWMQkbia9qiMWXkcHtAdfW5eVF8hbwEDw
+$ libp2p-lookup dht --network kusama --peer-id 12D3KooWQKqane1SqWJNWMQkbia9qiMWXkcHtAdfW5eVF8hbwEDw
 
 Lookup for peer with id PeerId("12D3KooWQKqane1SqWJNWMQkbia9qiMWXkcHtAdfW5eVF8hbwEDw") succeeded.
 
@@ -53,3 +53,7 @@ Protocols:
         - "/ksmcc3/finality-proof/1"
         - "/ksmcc3/light/2"
 ```
+
+[peer-id]: https://docs.libp2p.io/concepts/peer-id/
+[multiaddr]: https://docs.libp2p.io/concepts/addressing/
+[libp2p-identify]: https://github.com/libp2p/specs/tree/master/identify

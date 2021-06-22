@@ -15,6 +15,58 @@ $ cargo install libp2p-lookup
 ### Usage
 
 ```
+$ libp2p-lookup --help
+
+libp2p-lookup 0.4.0
+Lookup libp2p nodes.
+
+USAGE:
+    libp2p-lookup <SUBCOMMAND>
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+SUBCOMMANDS:
+    dht       Lookup peer by its ID via the Kademlia DHT
+    direct    Lookup peer by its address
+    help      Prints this message or the help of the given subcommand(s)
+```
+
+#### Lookup peer by [address][multiaddr]
+
+```
+$ libp2p-lookup direct --address /dnsaddr/bootstrap.libp2p.io/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa
+
+Lookup for peer with id PeerId("QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa") succeeded.
+
+Protocol version: "ipfs/0.1.0"
+Agent version: "go-ipfs/0.8.0/48f94e2"
+Observed address: "/ip4/2.200.106.157/tcp/56136"
+Listen addresses:
+        - "/ip4/147.75.77.187/tcp/4001"
+        - "/ip6/2604:1380:0:c100::1/tcp/4001"
+        - "/ip4/147.75.77.187/udp/4001/quic"
+        - "/ip6/2604:1380:0:c100::1/udp/4001/quic"
+Protocols:
+        - "/p2p/id/delta/1.0.0"
+        - "/ipfs/id/1.0.0"
+        - "/ipfs/id/push/1.0.0"
+        - "/ipfs/ping/1.0.0"
+        - "/libp2p/circuit/relay/0.1.0"
+        - "/ipfs/kad/1.0.0"
+        - "/ipfs/lan/kad/1.0.0"
+        - "/libp2p/autonat/1.0.0"
+        - "/ipfs/bitswap/1.2.0"
+        - "/ipfs/bitswap/1.1.0"
+        - "/ipfs/bitswap/1.0.0"
+        - "/ipfs/bitswap"
+        - "/x/"
+```
+
+#### Lookup peer by [peer ID][peer-id]
+
+```
 $ libp2p-lookup dht --network kusama --peer-id 12D3KooWQKqane1SqWJNWMQkbia9qiMWXkcHtAdfW5eVF8hbwEDw
 
 Lookup for peer with id PeerId("12D3KooWQKqane1SqWJNWMQkbia9qiMWXkcHtAdfW5eVF8hbwEDw") succeeded.

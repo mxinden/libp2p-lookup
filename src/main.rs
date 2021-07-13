@@ -1,6 +1,7 @@
 use ansi_term::Style;
 use futures::executor::block_on;
 use futures::future::{FutureExt, TryFutureExt};
+use futures::stream::StreamExt;
 use libp2p::core;
 use libp2p::core::either::EitherOutput;
 use libp2p::core::muxing::StreamMuxerBox;
@@ -154,7 +155,7 @@ impl LookupClient {
                 peer_id,
                 endpoint,
                 num_established,
-            } = self.swarm.next_event().await
+            } = self.swarm.next().await.expect("Infinite Stream.")
             {
                 assert_eq!(Into::<u32>::into(num_established), 1);
                 match endpoint {
@@ -173,7 +174,7 @@ impl LookupClient {
         self.swarm.behaviour_mut().kademlia.get_closest_peers(peer);
 
         loop {
-            match self.swarm.next_event().await {
+            match self.swarm.next().await.expect("Infinite Stream.") {
                 SwarmEvent::ConnectionEstablished {
                     peer_id,
                     num_established,
@@ -184,13 +185,13 @@ impl LookupClient {
                         return self.wait_for_identify(peer).await;
                     }
                 }
-                SwarmEvent::Behaviour(Event::Kademlia(KademliaEvent::QueryResult {
+                SwarmEvent::Behaviour(Event::Kademlia(KademliaEvent::OutboundQueryCompleted {
                     result: QueryResult::Bootstrap(_),
                     ..
                 })) => {
                     panic!("Unexpected bootstrap.");
                 }
-                SwarmEvent::Behaviour(Event::Kademlia(KademliaEvent::QueryResult {
+                SwarmEvent::Behaviour(Event::Kademlia(KademliaEvent::OutboundQueryCompleted {
                     result: QueryResult::GetClosestPeers(Ok(GetClosestPeersOk { peers, .. })),
                     ..
                 })) => {
@@ -221,7 +222,7 @@ impl LookupClient {
                         observed_addr,
                         ..
                     },
-            })) = self.swarm.next_event().await
+            })) = self.swarm.next().await.expect("Infinite Stream.")
             {
                 if peer_id == peer {
                     return Ok(Peer {

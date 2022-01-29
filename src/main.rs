@@ -70,8 +70,7 @@ async fn main() {
             println!("\n{}", peer);
         }
         Ok(Err(e)) | Err(e) => {
-            eprintln!("Lookup failed.");
-            eprintln!("\n{:?}", e);
+            log::error!("Lookup failed: {:?}.", e);
             std::process::exit(1);
         }
     }
@@ -148,7 +147,7 @@ impl LookupClient {
     }
 
     async fn lookup_directly(mut self, dst_addr: Multiaddr) -> Result<Peer, LookupError> {
-        self.swarm.dial_addr(dst_addr.clone()).unwrap();
+        self.swarm.dial(dst_addr.clone()).unwrap();
 
         loop {
             if let SwarmEvent::ConnectionEstablished {
@@ -200,7 +199,7 @@ impl LookupClient {
                     }
                     if !Swarm::is_connected(&self.swarm, &peer) {
                         // TODO: Kademlia might not be caching the address of the peer.
-                        Swarm::dial(&mut self.swarm, &peer).unwrap();
+                        Swarm::dial(&mut self.swarm, peer).unwrap();
                         return self.wait_for_identify(peer).await;
                     }
                 }

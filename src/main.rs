@@ -135,7 +135,11 @@ impl LookupClient {
         );
         // TODO: Don't use legacy for noise when connecting to IPFS.
         let transport = build_transport(local_key, true);
-        let mut swarm = SwarmBuilder::new(transport, behaviour, local_peer_id).build();
+        let mut swarm = SwarmBuilder::new(transport, behaviour, local_peer_id)
+            .executor(Box::new(|fut| {
+                async_std::task::spawn(fut);
+            }))
+            .build();
 
         if let Some(network) = network {
             for (addr, peer_id) in network.bootnodes() {
@@ -150,21 +154,30 @@ impl LookupClient {
         self.swarm.dial(dst_addr.clone()).unwrap();
 
         loop {
-            if let SwarmEvent::ConnectionEstablished {
-                peer_id,
-                endpoint,
-                num_established,
-            } = self.swarm.next().await.expect("Infinite Stream.")
-            {
-                assert_eq!(Into::<u32>::into(num_established), 1);
-                match endpoint {
-                    ConnectedPoint::Dialer { address } => {
-                        if address == dst_addr {
-                            return self.wait_for_identify(peer_id).await;
+            match self.swarm.next().await.expect("Infinite Stream.") {
+                SwarmEvent::ConnectionEstablished {
+                    peer_id,
+                    endpoint,
+                    num_established,
+                    concurrent_dial_errors: _,
+                } => {
+                    assert_eq!(Into::<u32>::into(num_established), 1);
+                    match endpoint {
+                        ConnectedPoint::Dialer {
+                            address,
+                            role_override: _,
+                        } => {
+                            if address == dst_addr {
+                                return self.wait_for_identify(peer_id).await;
+                            }
                         }
+                        ConnectedPoint::Listener { .. } => {}
                     }
-                    ConnectedPoint::Listener { .. } => {}
                 }
+                SwarmEvent::OutgoingConnectionError { peer_id, error } => {
+                    return Err(LookupError::FailedToDialPeer { error })
+                }
+                e => panic!("{:?}", e),
             }
         }
     }
@@ -241,6 +254,7 @@ impl LookupClient {
 #[derive(Debug)]
 enum LookupError {
     Timeout,
+    FailedToDialPeer { error: libp2p::swarm::DialError },
     FailedToFindPeerOnDht,
 }
 

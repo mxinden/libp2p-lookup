@@ -24,6 +24,7 @@ use std::io;
 use std::str::FromStr;
 use std::time::Duration;
 use structopt::StructOpt;
+use thiserror::Error;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "libp2p-lookup", about = "Lookup libp2p nodes.")]
@@ -174,7 +175,7 @@ impl LookupClient {
                         ConnectedPoint::Listener { .. } => {}
                     }
                 }
-                SwarmEvent::OutgoingConnectionError { peer_id, error } => {
+                SwarmEvent::OutgoingConnectionError { peer_id: _, error } => {
                     return Err(LookupError::FailedToDialPeer { error })
                 }
                 e => panic!("{:?}", e),
@@ -251,10 +252,13 @@ impl LookupClient {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 enum LookupError {
+    #[error("Looking up the given peer timed out")]
     Timeout,
+    #[error("Failed to dial peer {error}")]
     FailedToDialPeer { error: libp2p::swarm::DialError },
+    #[error("Failed to find peer on DHT")]
     FailedToFindPeerOnDht,
 }
 

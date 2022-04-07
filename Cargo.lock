@@ -1146,7 +1146,7 @@ dependencies = [
 
 [[package]]
 name = "libp2p-lookup"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "ansi_term",
  "async-std",
@@ -1231,9 +1231,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-relay"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "517be90a2ce60b6c3bdfe88f34cc789c61dafe6f694a7b45e644af7353880fa3"
+checksum = "3aa754cb7bccef51ebc3c458c6bbcef89d83b578a9925438389be841527d408f"
 dependencies = [
  "asynchronous-codec",
  "bytes",

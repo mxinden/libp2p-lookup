@@ -3,9 +3,8 @@ use futures::executor::block_on;
 use futures::future::{FutureExt, TryFutureExt};
 use futures::stream::StreamExt;
 use libp2p::core;
-use libp2p::core::either::EitherOutput;
-use libp2p::core::muxing::StreamMuxerBox;
-use libp2p::core::transport::{Boxed, Transport};
+use libp2p::core::transport::OrTransport;
+use libp2p::core::transport::Transport;
 use libp2p::core::upgrade;
 use libp2p::core::ConnectedPoint;
 use libp2p::identify::{Identify, IdentifyConfig, IdentifyEvent, IdentifyInfo};
@@ -15,6 +14,7 @@ use libp2p::kad::{
     QueryResult,
 };
 use libp2p::ping::{Ping, PingConfig, PingEvent};
+use libp2p::relay::v2 as relay;
 use libp2p::swarm::{SwarmBuilder, SwarmEvent};
 use libp2p::{
     dns, mplex, noise, tcp, yamux, InboundUpgradeExt, Multiaddr, NetworkBehaviour,
@@ -130,12 +130,78 @@ impl LookupClient {
         let local_key = Keypair::generate_ed25519();
         let local_peer_id = PeerId::from(local_key.public());
 
-        let behaviour = LookupBehaviour::new(
-            local_key.clone(),
-            network.clone().map(|n| n.protocol()).flatten(),
-        );
-        // TODO: Don't use legacy for noise when connecting to IPFS.
-        let transport = build_transport(local_key, true);
+        let (relay_transport, relay_client) =
+            relay::client::Client::new_transport_and_behaviour(local_peer_id);
+
+        let transport = {
+            let transport = OrTransport::new(
+                relay_transport,
+                block_on(dns::DnsConfig::system(
+                    tcp::TcpConfig::new().port_reuse(true).nodelay(true),
+                ))
+                .unwrap(),
+            );
+
+            let authentication_config = {
+                let noise_keypair_spec = noise::Keypair::<noise::X25519Spec>::new()
+                    .into_authentic(&local_key)
+                    .unwrap();
+
+                noise::NoiseConfig::xx(noise_keypair_spec).into_authenticated()
+            };
+
+            let multiplexing_config = {
+                let mut mplex_config = mplex::MplexConfig::new();
+                mplex_config.set_max_buffer_behaviour(mplex::MaxBufferBehaviour::Block);
+                mplex_config.set_max_buffer_size(usize::MAX);
+
+                let mut yamux_config = yamux::YamuxConfig::default();
+                // Enable proper flow-control: window updates are only sent when
+                // buffered data has been consumed.
+                yamux_config.set_window_update_mode(yamux::WindowUpdateMode::on_read());
+
+                core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
+                    .map_inbound(core::muxing::StreamMuxerBox::new)
+                    .map_outbound(core::muxing::StreamMuxerBox::new)
+            };
+
+            transport
+                .upgrade(upgrade::Version::V1)
+                .authenticate(authentication_config)
+                .multiplex(multiplexing_config)
+                .timeout(Duration::from_secs(20))
+                .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+                .boxed()
+        };
+
+        let behaviour = {
+            let local_peer_id = PeerId::from(local_key.public());
+
+            // Create a Kademlia behaviour.
+            let store = MemoryStore::new(local_peer_id);
+            let mut kademlia_config = KademliaConfig::default();
+            if let Some(protocol_name) = network.clone().map(|n| n.protocol()).flatten() {
+                kademlia_config.set_protocol_name(protocol_name.into_bytes());
+            }
+            let kademlia = Kademlia::with_config(local_peer_id, store, kademlia_config);
+
+            let ping = Ping::new(PingConfig::new().with_keep_alive(true));
+
+            let user_agent =
+                "substrate-node/v2.0.0-e3245d49d-x86_64-linux-gnu (unknown)".to_string();
+            let proto_version = "/substrate/1.0".to_string();
+            let identify = Identify::new(
+                IdentifyConfig::new(proto_version, local_key.public())
+                    .with_agent_version(user_agent),
+            );
+
+            LookupBehaviour {
+                kademlia,
+                ping,
+                identify,
+                relay: relay_client,
+            }
+        };
         let mut swarm = SwarmBuilder::new(transport, behaviour, local_peer_id)
             .executor(Box::new(|fut| {
                 async_std::task::spawn(fut);
@@ -177,6 +243,12 @@ impl LookupClient {
                 }
                 SwarmEvent::OutgoingConnectionError { peer_id: _, error } => {
                     return Err(LookupError::FailedToDialPeer { error })
+                }
+                SwarmEvent::Dialing(_) => {}
+                SwarmEvent::Behaviour(_) => {
+                    // Ignore any behaviour events until we are connected to the
+                    // destination peer. These should be events from the
+                    // connection to a relay only.
                 }
                 e => panic!("{:?}", e),
             }
@@ -267,6 +339,7 @@ pub enum Event {
     Ping(PingEvent),
     Identify(IdentifyEvent),
     Kademlia(KademliaEvent),
+    Relay(relay::client::Event),
 }
 
 impl From<PingEvent> for Event {
@@ -287,103 +360,19 @@ impl From<KademliaEvent> for Event {
     }
 }
 
+impl From<relay::client::Event> for Event {
+    fn from(e: relay::client::Event) -> Self {
+        Event::Relay(e)
+    }
+}
+
 #[derive(NetworkBehaviour)]
 #[behaviour(out_event = "Event", event_process = false)]
 struct LookupBehaviour {
     pub(crate) kademlia: Kademlia<MemoryStore>,
     pub(crate) ping: Ping,
     pub(crate) identify: Identify,
-}
-
-impl LookupBehaviour {
-    fn new(local_key: Keypair, protocol_name: Option<String>) -> Self {
-        let local_peer_id = PeerId::from(local_key.public());
-
-        // Create a Kademlia behaviour.
-        let store = MemoryStore::new(local_peer_id);
-        let mut kademlia_config = KademliaConfig::default();
-        if let Some(protocol_name) = protocol_name {
-            kademlia_config.set_protocol_name(protocol_name.into_bytes());
-        }
-        let kademlia = Kademlia::with_config(local_peer_id, store, kademlia_config);
-
-        let ping = Ping::new(PingConfig::new().with_keep_alive(true));
-
-        let user_agent = "substrate-node/v2.0.0-e3245d49d-x86_64-linux-gnu (unknown)".to_string();
-        let proto_version = "/substrate/1.0".to_string();
-        let identify = Identify::new(
-            IdentifyConfig::new(proto_version, local_key.public()).with_agent_version(user_agent),
-        );
-
-        LookupBehaviour {
-            kademlia,
-            ping,
-            identify,
-        }
-    }
-}
-
-fn build_transport(keypair: Keypair, noise_legacy: bool) -> Boxed<(PeerId, StreamMuxerBox)> {
-    let tcp = tcp::TcpConfig::new().nodelay(true);
-    let transport = block_on(dns::DnsConfig::system(tcp)).unwrap();
-
-    let authentication_config = {
-        let noise_keypair_legacy = noise::Keypair::<noise::X25519>::new()
-            .into_authentic(&keypair)
-            .unwrap();
-        let noise_keypair_spec = noise::Keypair::<noise::X25519Spec>::new()
-            .into_authentic(&keypair)
-            .unwrap();
-
-        let mut xx_config = noise::NoiseConfig::xx(noise_keypair_spec);
-        let mut ix_config = noise::NoiseConfig::ix(noise_keypair_legacy);
-
-        if noise_legacy {
-            // Legacy noise configurations for backward compatibility.
-            let noise_legacy = noise::LegacyConfig {
-                recv_legacy_handshake: true,
-                ..noise::LegacyConfig::default()
-            };
-
-            xx_config.set_legacy_config(noise_legacy.clone());
-            ix_config.set_legacy_config(noise_legacy);
-        }
-
-        let extract_peer_id = |result| match result {
-            EitherOutput::First((peer_id, o)) => (peer_id, EitherOutput::First(o)),
-            EitherOutput::Second((peer_id, o)) => (peer_id, EitherOutput::Second(o)),
-        };
-
-        core::upgrade::SelectUpgrade::new(
-            xx_config.into_authenticated(),
-            ix_config.into_authenticated(),
-        )
-        .map_inbound(extract_peer_id)
-        .map_outbound(extract_peer_id)
-    };
-
-    let multiplexing_config = {
-        let mut mplex_config = mplex::MplexConfig::new();
-        mplex_config.set_max_buffer_behaviour(mplex::MaxBufferBehaviour::Block);
-        mplex_config.set_max_buffer_size(usize::MAX);
-
-        let mut yamux_config = yamux::YamuxConfig::default();
-        // Enable proper flow-control: window updates are only sent when
-        // buffered data has been consumed.
-        yamux_config.set_window_update_mode(yamux::WindowUpdateMode::on_read());
-
-        core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
-            .map_inbound(core::muxing::StreamMuxerBox::new)
-            .map_outbound(core::muxing::StreamMuxerBox::new)
-    };
-
-    transport
-        .upgrade(upgrade::Version::V1)
-        .authenticate(authentication_config)
-        .multiplex(multiplexing_config)
-        .timeout(Duration::from_secs(20))
-        .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
-        .boxed()
+    relay: relay::client::Client,
 }
 
 #[derive(Debug, Clone)]

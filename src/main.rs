@@ -136,9 +136,9 @@ impl LookupClient {
         let transport = {
             let transport = OrTransport::new(
                 relay_transport,
-                block_on(dns::DnsConfig::system(
-                    tcp::TcpConfig::new().port_reuse(true).nodelay(true),
-                ))
+                block_on(dns::DnsConfig::system(tcp::TcpTransport::new(
+                    tcp::GenTcpConfig::new().port_reuse(true).nodelay(true),
+                )))
                 .unwrap(),
             );
 

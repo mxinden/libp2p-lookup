@@ -570,6 +570,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "dns-parser"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c4d33be9473d06f75f58220f71f7a9317aca647dc061dbd3c361b0bef505fbea"
+dependencies = [
+ "byteorder",
+ "quick-error",
+]
+
+[[package]]
 name = "dtoa"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1030,6 +1040,7 @@ dependencies = [
  "libp2p-dns",
  "libp2p-identify",
  "libp2p-kad",
+ "libp2p-mdns",
  "libp2p-metrics",
  "libp2p-mplex",
  "libp2p-noise",
@@ -1154,6 +1165,26 @@ dependencies = [
  "log",
  "structopt",
  "thiserror",
+]
+
+[[package]]
+name = "libp2p-mdns"
+version = "0.41.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "761704e727f7d68d58d7bc2231eafae5fc1b9814de24290f126df09d4bd37a15"
+dependencies = [
+ "async-io",
+ "data-encoding",
+ "dns-parser",
+ "futures",
+ "if-watch",
+ "libp2p-core",
+ "libp2p-swarm",
+ "log",
+ "rand 0.8.4",
+ "smallvec",
+ "socket2",
+ "void",
 ]
 
 [[package]]

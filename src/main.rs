@@ -7,15 +7,15 @@ use libp2p::core::transport::OrTransport;
 use libp2p::core::transport::Transport;
 use libp2p::core::upgrade;
 use libp2p::core::ConnectedPoint;
-use libp2p::identify::{Identify, IdentifyConfig, IdentifyEvent, IdentifyInfo};
+use libp2p::identify;
 use libp2p::identity::Keypair;
 use libp2p::kad::{
     record::store::MemoryStore, GetClosestPeersOk, Kademlia, KademliaConfig, KademliaEvent,
     QueryResult,
 };
-use libp2p::ping::{Ping, PingConfig, PingEvent};
+use libp2p::ping;
 use libp2p::relay::v2 as relay;
-use libp2p::swarm::{SwarmBuilder, SwarmEvent};
+use libp2p::swarm::{self, SwarmBuilder, SwarmEvent};
 use libp2p::{
     dns, mplex, noise, tcp, yamux, InboundUpgradeExt, Multiaddr, NetworkBehaviour,
     OutboundUpgradeExt, PeerId, Swarm,
@@ -181,17 +181,17 @@ impl LookupClient {
             let store = MemoryStore::new(local_peer_id);
             let mut kademlia_config = KademliaConfig::default();
             if let Some(protocol_name) = network.clone().map(|n| n.protocol()).flatten() {
-                kademlia_config.set_protocol_name(protocol_name.into_bytes());
+                kademlia_config.set_protocol_names(vec![protocol_name.into_bytes().into()]);
             }
             let kademlia = Kademlia::with_config(local_peer_id, store, kademlia_config);
 
-            let ping = Ping::new(PingConfig::new().with_keep_alive(true));
+            let ping = ping::Behaviour::new(ping::Config::new());
 
             let user_agent =
                 "substrate-node/v2.0.0-e3245d49d-x86_64-linux-gnu (unknown)".to_string();
             let proto_version = "/substrate/1.0".to_string();
-            let identify = Identify::new(
-                IdentifyConfig::new(proto_version, local_key.public())
+            let identify = identify::Behaviour::new(
+                identify::Config::new(proto_version, local_key.public())
                     .with_agent_version(user_agent),
             );
 
@@ -200,6 +200,7 @@ impl LookupClient {
                 ping,
                 identify,
                 relay: relay_client,
+                keep_alive: swarm::keep_alive::Behaviour,
             }
         };
         let mut swarm = SwarmBuilder::new(transport, behaviour, local_peer_id)
@@ -270,16 +271,20 @@ impl LookupClient {
                         return self.wait_for_identify(peer).await;
                     }
                 }
-                SwarmEvent::Behaviour(Event::Kademlia(KademliaEvent::OutboundQueryCompleted {
-                    result: QueryResult::Bootstrap(_),
-                    ..
-                })) => {
+                SwarmEvent::Behaviour(LookupBehaviourEvent::Kademlia(
+                    KademliaEvent::OutboundQueryCompleted {
+                        result: QueryResult::Bootstrap(_),
+                        ..
+                    },
+                )) => {
                     panic!("Unexpected bootstrap.");
                 }
-                SwarmEvent::Behaviour(Event::Kademlia(KademliaEvent::OutboundQueryCompleted {
-                    result: QueryResult::GetClosestPeers(Ok(GetClosestPeersOk { peers, .. })),
-                    ..
-                })) => {
+                SwarmEvent::Behaviour(LookupBehaviourEvent::Kademlia(
+                    KademliaEvent::OutboundQueryCompleted {
+                        result: QueryResult::GetClosestPeers(Ok(GetClosestPeersOk { peers, .. })),
+                        ..
+                    },
+                )) => {
                     if !peers.contains(&peer) {
                         return Err(LookupError::FailedToFindPeerOnDht);
                     }
@@ -296,18 +301,20 @@ impl LookupClient {
 
     async fn wait_for_identify(&mut self, peer: PeerId) -> Result<Peer, LookupError> {
         loop {
-            if let SwarmEvent::Behaviour(Event::Identify(IdentifyEvent::Received {
-                peer_id,
-                info:
-                    IdentifyInfo {
-                        protocol_version,
-                        agent_version,
-                        listen_addrs,
-                        protocols,
-                        observed_addr,
-                        ..
-                    },
-            })) = self.swarm.next().await.expect("Infinite Stream.")
+            if let SwarmEvent::Behaviour(LookupBehaviourEvent::Identify(
+                identify::Event::Received {
+                    peer_id,
+                    info:
+                        identify::Info {
+                            protocol_version,
+                            agent_version,
+                            listen_addrs,
+                            protocols,
+                            observed_addr,
+                            ..
+                        },
+                },
+            )) = self.swarm.next().await.expect("Infinite Stream.")
             {
                 if peer_id == peer {
                     return Ok(Peer {
@@ -334,45 +341,13 @@ enum LookupError {
     FailedToFindPeerOnDht,
 }
 
-#[derive(Debug)]
-pub enum Event {
-    Ping(PingEvent),
-    Identify(IdentifyEvent),
-    Kademlia(KademliaEvent),
-    Relay(relay::client::Event),
-}
-
-impl From<PingEvent> for Event {
-    fn from(e: PingEvent) -> Self {
-        Event::Ping(e)
-    }
-}
-
-impl From<IdentifyEvent> for Event {
-    fn from(e: IdentifyEvent) -> Self {
-        Event::Identify(e)
-    }
-}
-
-impl From<KademliaEvent> for Event {
-    fn from(e: KademliaEvent) -> Self {
-        Event::Kademlia(e)
-    }
-}
-
-impl From<relay::client::Event> for Event {
-    fn from(e: relay::client::Event) -> Self {
-        Event::Relay(e)
-    }
-}
-
 #[derive(NetworkBehaviour)]
-#[behaviour(out_event = "Event", event_process = false)]
 struct LookupBehaviour {
     pub(crate) kademlia: Kademlia<MemoryStore>,
-    pub(crate) ping: Ping,
-    pub(crate) identify: Identify,
+    pub(crate) ping: ping::Behaviour,
+    pub(crate) identify: identify::Behaviour,
     relay: relay::client::Client,
+    keep_alive: swarm::keep_alive::Behaviour,
 }
 
 #[derive(Debug, Clone)]

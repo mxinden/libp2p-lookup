@@ -3,6 +3,7 @@ use futures::executor::block_on;
 use futures::future::{FutureExt, TryFutureExt};
 use futures::stream::StreamExt;
 use libp2p::core;
+use libp2p::core::muxing::StreamMuxerBox;
 use libp2p::core::transport::OrTransport;
 use libp2p::core::transport::Transport;
 use libp2p::core::upgrade;
@@ -15,9 +16,10 @@ use libp2p::kad::{
 };
 use libp2p::ping;
 use libp2p::relay::v2 as relay;
+use libp2p::swarm::derive_prelude::EitherOutput;
 use libp2p::swarm::{self, SwarmBuilder, SwarmEvent};
 use libp2p::{
-    dns, mplex, noise, tcp, yamux, InboundUpgradeExt, Multiaddr, NetworkBehaviour,
+    dns, mplex, noise, swarm::NetworkBehaviour, tcp, yamux, InboundUpgradeExt, Multiaddr,
     OutboundUpgradeExt, PeerId, Swarm,
 };
 use std::io;
@@ -136,8 +138,8 @@ impl LookupClient {
         let transport = {
             let transport = OrTransport::new(
                 relay_transport,
-                block_on(dns::DnsConfig::system(tcp::TcpTransport::new(
-                    tcp::GenTcpConfig::new().port_reuse(true).nodelay(true),
+                block_on(dns::DnsConfig::system(tcp::async_io::Transport::new(
+                    tcp::Config::new().port_reuse(true).nodelay(true),
                 )))
                 .unwrap(),
             );
@@ -165,13 +167,25 @@ impl LookupClient {
                     .map_outbound(core::muxing::StreamMuxerBox::new)
             };
 
-            transport
-                .upgrade(upgrade::Version::V1)
-                .authenticate(authentication_config)
-                .multiplex(multiplexing_config)
-                .timeout(Duration::from_secs(20))
-                .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
-                .boxed()
+            let quic_transport = {
+                let config = libp2p::quic::Config::new(&local_key);
+                libp2p::quic::async_std::Transport::new(config)
+            };
+
+            libp2p::core::transport::OrTransport::new(
+                quic_transport,
+                transport
+                    .upgrade(upgrade::Version::V1)
+                    .authenticate(authentication_config)
+                    .multiplex(multiplexing_config)
+                    .timeout(Duration::from_secs(20)),
+            )
+            .map(|either_output, _| match either_output {
+                EitherOutput::First((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
+                EitherOutput::Second((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
+            })
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+            .boxed()
         };
 
         let behaviour = {
@@ -203,11 +217,15 @@ impl LookupClient {
                 keep_alive: swarm::keep_alive::Behaviour,
             }
         };
-        let mut swarm = SwarmBuilder::new(transport, behaviour, local_peer_id)
-            .executor(Box::new(|fut| {
+        let mut swarm = SwarmBuilder::with_executor(
+            transport,
+            behaviour,
+            local_peer_id,
+            Box::new(|fut| {
                 async_std::task::spawn(fut);
-            }))
-            .build();
+            }),
+        )
+        .build();
 
         if let Some(network) = network {
             for (addr, peer_id) in network.bootnodes() {
@@ -235,7 +253,7 @@ impl LookupClient {
                             address,
                             role_override: _,
                         } => {
-                            if address == dst_addr {
+                            if dbg!(&address) == dbg!(&dst_addr) {
                                 return self.wait_for_identify(peer_id).await;
                             }
                         }

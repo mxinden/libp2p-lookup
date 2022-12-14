@@ -3,23 +3,27 @@ use futures::executor::block_on;
 use futures::future::{FutureExt, TryFutureExt};
 use futures::stream::StreamExt;
 use libp2p::core;
+use libp2p::core::muxing::StreamMuxerBox;
 use libp2p::core::transport::OrTransport;
 use libp2p::core::transport::Transport;
 use libp2p::core::upgrade;
 use libp2p::core::ConnectedPoint;
 use libp2p::identify;
 use libp2p::identity::Keypair;
+use libp2p::kad::ProgressStep;
 use libp2p::kad::{
     record::store::MemoryStore, GetClosestPeersOk, Kademlia, KademliaConfig, KademliaEvent,
     QueryResult,
 };
 use libp2p::ping;
 use libp2p::relay::v2 as relay;
+use libp2p::swarm::derive_prelude::EitherOutput;
 use libp2p::swarm::{self, SwarmBuilder, SwarmEvent};
 use libp2p::{
-    dns, mplex, noise, tcp, yamux, InboundUpgradeExt, Multiaddr, NetworkBehaviour,
+    dns, mplex, noise, swarm::NetworkBehaviour, tcp, yamux, InboundUpgradeExt, Multiaddr,
     OutboundUpgradeExt, PeerId, Swarm,
 };
+use log::debug;
 use std::io;
 use std::str::FromStr;
 use std::time::Duration;
@@ -136,10 +140,7 @@ impl LookupClient {
         let transport = {
             let transport = OrTransport::new(
                 relay_transport,
-                block_on(dns::DnsConfig::system(tcp::TcpTransport::new(
-                    tcp::GenTcpConfig::new().port_reuse(true).nodelay(true),
-                )))
-                .unwrap(),
+                tcp::async_io::Transport::new(tcp::Config::new().port_reuse(true).nodelay(true)),
             );
 
             let authentication_config = {
@@ -165,13 +166,28 @@ impl LookupClient {
                     .map_outbound(core::muxing::StreamMuxerBox::new)
             };
 
-            transport
-                .upgrade(upgrade::Version::V1)
-                .authenticate(authentication_config)
-                .multiplex(multiplexing_config)
-                .timeout(Duration::from_secs(20))
-                .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
-                .boxed()
+            let quic_transport = {
+                let config = libp2p::quic::Config::new(&local_key);
+                libp2p::quic::async_std::Transport::new(config)
+            };
+
+            block_on(dns::DnsConfig::system(
+                libp2p::core::transport::OrTransport::new(
+                    quic_transport,
+                    transport
+                        .upgrade(upgrade::Version::V1)
+                        .authenticate(authentication_config)
+                        .multiplex(multiplexing_config)
+                        .timeout(Duration::from_secs(20)),
+                ),
+            ))
+            .unwrap()
+            .map(|either_output, _| match either_output {
+                EitherOutput::First((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
+                EitherOutput::Second((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
+            })
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+            .boxed()
         };
 
         let behaviour = {
@@ -203,11 +219,15 @@ impl LookupClient {
                 keep_alive: swarm::keep_alive::Behaviour,
             }
         };
-        let mut swarm = SwarmBuilder::new(transport, behaviour, local_peer_id)
-            .executor(Box::new(|fut| {
+        let mut swarm = SwarmBuilder::with_executor(
+            transport,
+            behaviour,
+            local_peer_id,
+            Box::new(|fut| {
                 async_std::task::spawn(fut);
-            }))
-            .build();
+            }),
+        )
+        .build();
 
         if let Some(network) = network {
             for (addr, peer_id) in network.bootnodes() {
@@ -272,7 +292,7 @@ impl LookupClient {
                     }
                 }
                 SwarmEvent::Behaviour(LookupBehaviourEvent::Kademlia(
-                    KademliaEvent::OutboundQueryCompleted {
+                    KademliaEvent::OutboundQueryProgressed {
                         result: QueryResult::Bootstrap(_),
                         ..
                     },
@@ -280,18 +300,23 @@ impl LookupClient {
                     panic!("Unexpected bootstrap.");
                 }
                 SwarmEvent::Behaviour(LookupBehaviourEvent::Kademlia(
-                    KademliaEvent::OutboundQueryCompleted {
+                    KademliaEvent::OutboundQueryProgressed {
                         result: QueryResult::GetClosestPeers(Ok(GetClosestPeersOk { peers, .. })),
+                        step: ProgressStep { count: _, last },
                         ..
                     },
                 )) => {
-                    if !peers.contains(&peer) {
-                        return Err(LookupError::FailedToFindPeerOnDht);
-                    }
-                    if !Swarm::is_connected(&self.swarm, &peer) {
-                        // TODO: Kademlia might not be caching the address of the peer.
-                        Swarm::dial(&mut self.swarm, peer).unwrap();
+                    if peers.contains(&peer) {
+                        if !Swarm::is_connected(&self.swarm, &peer) {
+                            // TODO: Kademlia might not be caching the address of the peer.
+                            Swarm::dial(&mut self.swarm, peer).unwrap();
+                        }
+
                         return self.wait_for_identify(peer).await;
+                    }
+
+                    if last {
+                        return Err(LookupError::FailedToFindPeerOnDht);
                     }
                 }
                 _ => {}
@@ -301,31 +326,33 @@ impl LookupClient {
 
     async fn wait_for_identify(&mut self, peer: PeerId) -> Result<Peer, LookupError> {
         loop {
-            if let SwarmEvent::Behaviour(LookupBehaviourEvent::Identify(
-                identify::Event::Received {
-                    peer_id,
-                    info:
-                        identify::Info {
+            match self.swarm.next().await.expect("Infinite Stream.") {
+                SwarmEvent::Behaviour(LookupBehaviourEvent::Identify(
+                    identify::Event::Received {
+                        peer_id,
+                        info:
+                            identify::Info {
+                                protocol_version,
+                                agent_version,
+                                listen_addrs,
+                                protocols,
+                                observed_addr,
+                                ..
+                            },
+                    },
+                )) => {
+                    if peer_id == peer {
+                        return Ok(Peer {
+                            peer_id,
                             protocol_version,
                             agent_version,
                             listen_addrs,
                             protocols,
                             observed_addr,
-                            ..
-                        },
-                },
-            )) = self.swarm.next().await.expect("Infinite Stream.")
-            {
-                if peer_id == peer {
-                    return Ok(Peer {
-                        peer_id,
-                        protocol_version,
-                        agent_version,
-                        listen_addrs,
-                        protocols,
-                        observed_addr,
-                    });
+                        });
+                    }
                 }
+                e => debug!("{e:?}"),
             }
         }
     }

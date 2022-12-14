@@ -10,6 +10,7 @@ use libp2p::core::upgrade;
 use libp2p::core::ConnectedPoint;
 use libp2p::identify;
 use libp2p::identity::Keypair;
+use libp2p::kad::ProgressStep;
 use libp2p::kad::{
     record::store::MemoryStore, GetClosestPeersOk, Kademlia, KademliaConfig, KademliaEvent,
     QueryResult,
@@ -22,6 +23,7 @@ use libp2p::{
     dns, mplex, noise, swarm::NetworkBehaviour, tcp, yamux, InboundUpgradeExt, Multiaddr,
     OutboundUpgradeExt, PeerId, Swarm,
 };
+use log::debug;
 use std::io;
 use std::str::FromStr;
 use std::time::Duration;
@@ -138,10 +140,7 @@ impl LookupClient {
         let transport = {
             let transport = OrTransport::new(
                 relay_transport,
-                block_on(dns::DnsConfig::system(tcp::async_io::Transport::new(
-                    tcp::Config::new().port_reuse(true).nodelay(true),
-                )))
-                .unwrap(),
+                tcp::async_io::Transport::new(tcp::Config::new().port_reuse(true).nodelay(true)),
             );
 
             let authentication_config = {
@@ -172,14 +171,17 @@ impl LookupClient {
                 libp2p::quic::async_std::Transport::new(config)
             };
 
-            libp2p::core::transport::OrTransport::new(
-                quic_transport,
-                transport
-                    .upgrade(upgrade::Version::V1)
-                    .authenticate(authentication_config)
-                    .multiplex(multiplexing_config)
-                    .timeout(Duration::from_secs(20)),
-            )
+            block_on(dns::DnsConfig::system(
+                libp2p::core::transport::OrTransport::new(
+                    quic_transport,
+                    transport
+                        .upgrade(upgrade::Version::V1)
+                        .authenticate(authentication_config)
+                        .multiplex(multiplexing_config)
+                        .timeout(Duration::from_secs(20)),
+                ),
+            ))
+            .unwrap()
             .map(|either_output, _| match either_output {
                 EitherOutput::First((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
                 EitherOutput::Second((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
@@ -253,7 +255,7 @@ impl LookupClient {
                             address,
                             role_override: _,
                         } => {
-                            if dbg!(&address) == dbg!(&dst_addr) {
+                            if address == dst_addr {
                                 return self.wait_for_identify(peer_id).await;
                             }
                         }
@@ -290,7 +292,7 @@ impl LookupClient {
                     }
                 }
                 SwarmEvent::Behaviour(LookupBehaviourEvent::Kademlia(
-                    KademliaEvent::OutboundQueryCompleted {
+                    KademliaEvent::OutboundQueryProgressed {
                         result: QueryResult::Bootstrap(_),
                         ..
                     },
@@ -298,18 +300,23 @@ impl LookupClient {
                     panic!("Unexpected bootstrap.");
                 }
                 SwarmEvent::Behaviour(LookupBehaviourEvent::Kademlia(
-                    KademliaEvent::OutboundQueryCompleted {
+                    KademliaEvent::OutboundQueryProgressed {
                         result: QueryResult::GetClosestPeers(Ok(GetClosestPeersOk { peers, .. })),
+                        step: ProgressStep { count: _, last },
                         ..
                     },
                 )) => {
-                    if !peers.contains(&peer) {
-                        return Err(LookupError::FailedToFindPeerOnDht);
-                    }
-                    if !Swarm::is_connected(&self.swarm, &peer) {
-                        // TODO: Kademlia might not be caching the address of the peer.
-                        Swarm::dial(&mut self.swarm, peer).unwrap();
+                    if peers.contains(&peer) {
+                        if !Swarm::is_connected(&self.swarm, &peer) {
+                            // TODO: Kademlia might not be caching the address of the peer.
+                            Swarm::dial(&mut self.swarm, peer).unwrap();
+                        }
+
                         return self.wait_for_identify(peer).await;
+                    }
+
+                    if last {
+                        return Err(LookupError::FailedToFindPeerOnDht);
                     }
                 }
                 _ => {}
@@ -319,31 +326,33 @@ impl LookupClient {
 
     async fn wait_for_identify(&mut self, peer: PeerId) -> Result<Peer, LookupError> {
         loop {
-            if let SwarmEvent::Behaviour(LookupBehaviourEvent::Identify(
-                identify::Event::Received {
-                    peer_id,
-                    info:
-                        identify::Info {
+            match self.swarm.next().await.expect("Infinite Stream.") {
+                SwarmEvent::Behaviour(LookupBehaviourEvent::Identify(
+                    identify::Event::Received {
+                        peer_id,
+                        info:
+                            identify::Info {
+                                protocol_version,
+                                agent_version,
+                                listen_addrs,
+                                protocols,
+                                observed_addr,
+                                ..
+                            },
+                    },
+                )) => {
+                    if peer_id == peer {
+                        return Ok(Peer {
+                            peer_id,
                             protocol_version,
                             agent_version,
                             listen_addrs,
                             protocols,
                             observed_addr,
-                            ..
-                        },
-                },
-            )) = self.swarm.next().await.expect("Infinite Stream.")
-            {
-                if peer_id == peer {
-                    return Ok(Peer {
-                        peer_id,
-                        protocol_version,
-                        agent_version,
-                        listen_addrs,
-                        protocols,
-                        observed_addr,
-                    });
+                        });
+                    }
                 }
+                e => debug!("{e:?}"),
             }
         }
     }

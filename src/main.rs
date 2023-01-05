@@ -134,15 +134,11 @@ impl LookupClient {
         let local_key = Keypair::generate_ed25519();
         let local_peer_id = PeerId::from(local_key.public());
 
+        println!("Local peer id: {local_peer_id}");
         let (relay_transport, relay_client) =
             relay::client::Client::new_transport_and_behaviour(local_peer_id);
 
         let transport = {
-            let transport = OrTransport::new(
-                relay_transport,
-                tcp::async_io::Transport::new(tcp::Config::new().port_reuse(true).nodelay(true)),
-            );
-
             let authentication_config = {
                 let noise_keypair_spec = noise::Keypair::<noise::X25519Spec>::new()
                     .into_authentic(&local_key)
@@ -166,20 +162,23 @@ impl LookupClient {
                     .map_outbound(core::muxing::StreamMuxerBox::new)
             };
 
+            let tcp_and_relay_transport = OrTransport::new(
+                relay_transport,
+                tcp::async_io::Transport::new(tcp::Config::new().port_reuse(true).nodelay(true)),
+            )
+            .upgrade(upgrade::Version::V1)
+            .authenticate(authentication_config)
+            .multiplex(multiplexing_config)
+            .timeout(Duration::from_secs(20));
+
             let quic_transport = {
-                let config = libp2p::quic::Config::new(&local_key);
+                let mut config = libp2p::quic::Config::new(&local_key);
+                config.support_draft_29 = true;
                 libp2p::quic::async_std::Transport::new(config)
             };
 
             block_on(dns::DnsConfig::system(
-                libp2p::core::transport::OrTransport::new(
-                    quic_transport,
-                    transport
-                        .upgrade(upgrade::Version::V1)
-                        .authenticate(authentication_config)
-                        .multiplex(multiplexing_config)
-                        .timeout(Duration::from_secs(20)),
-                ),
+                libp2p::core::transport::OrTransport::new(quic_transport, tcp_and_relay_transport),
             ))
             .unwrap()
             .map(|either_output, _| match either_output {
@@ -248,6 +247,7 @@ impl LookupClient {
                     endpoint,
                     num_established,
                     concurrent_dial_errors: _,
+                    established_in: _,
                 } => {
                     assert_eq!(Into::<u32>::into(num_established), 1);
                     match endpoint {

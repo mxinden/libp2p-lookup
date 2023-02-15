@@ -1,6 +1,6 @@
 use ansi_term::Style;
 use futures::executor::block_on;
-use futures::future::{FutureExt, TryFutureExt};
+use futures::future::{Either, FutureExt, TryFutureExt};
 use futures::stream::StreamExt;
 use libp2p::core;
 use libp2p::core::muxing::StreamMuxerBox;
@@ -16,8 +16,7 @@ use libp2p::kad::{
     QueryResult,
 };
 use libp2p::ping;
-use libp2p::relay::v2 as relay;
-use libp2p::swarm::derive_prelude::EitherOutput;
+use libp2p::relay;
 use libp2p::swarm::{self, SwarmBuilder, SwarmEvent};
 use libp2p::{
     dns, mplex, noise, swarm::NetworkBehaviour, tcp, yamux, InboundUpgradeExt, Multiaddr,
@@ -135,8 +134,8 @@ impl LookupClient {
         let local_peer_id = PeerId::from(local_key.public());
 
         println!("Local peer id: {local_peer_id}");
-        let (relay_transport, relay_client) =
-            relay::client::Client::new_transport_and_behaviour(local_peer_id);
+
+        let (relay_transport, relay_client) = relay::client::new(local_peer_id);
 
         let transport = {
             let authentication_config = {
@@ -182,8 +181,8 @@ impl LookupClient {
             ))
             .unwrap()
             .map(|either_output, _| match either_output {
-                EitherOutput::First((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
-                EitherOutput::Second((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
+                Either::Left((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
+                Either::Right((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
             })
             .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
             .boxed()
@@ -373,7 +372,7 @@ struct LookupBehaviour {
     pub(crate) kademlia: Kademlia<MemoryStore>,
     pub(crate) ping: ping::Behaviour,
     pub(crate) identify: identify::Behaviour,
-    relay: relay::client::Client,
+    relay: relay::client::Behaviour,
     keep_alive: swarm::keep_alive::Behaviour,
 }
 

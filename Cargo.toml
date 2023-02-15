@@ -10,9 +10,9 @@ repository = "https://github.com/mxinden/libp2p-lookup"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-libp2p = { git = "https://github.com/libp2p/rust-libp2p", version = "0.51.0", default-features = false, features = ["dns", "async-std", "noise", "tcp", "yamux", "identify", "kad", "ping", "mplex", "relay", "quic", "rsa", "macros", "secp256k1", "ecdsa"] }
+libp2p = { git = "https://github.com/libp2p/rust-libp2p", branch = "master", version = "0.51.0", default-features = false, features = ["dns", "async-std", "noise", "tcp", "yamux", "identify", "kad", "ping", "mplex", "relay", "quic", "rsa", "macros", "secp256k1", "ecdsa"] }
 structopt = "0.3.26"
-futures = "0.3.25"
+futures = "0.3.26"
 env_logger = "0.10.0"
 async-std = { version = "1.12.0", features = ["attributes"] }
 ansi_term = "0.12.1"

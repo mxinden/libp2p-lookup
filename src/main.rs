@@ -71,10 +71,10 @@ async fn main() {
     match timed_lookup.await {
         Ok(Ok(peer)) => {
             println!("Lookup for peer with id {:?} succeeded.", peer.peer_id);
-            println!("\n{}", peer);
+            println!("\n{peer}");
         }
         Ok(Err(e)) | Err(e) => {
-            log::error!("Lookup failed: {:?}.", e);
+            log::error!("Lookup failed: {e:?}.");
             std::process::exit(1);
         }
     }
@@ -89,7 +89,7 @@ fn print_key_value<V: std::fmt::Debug>(
     v: V,
     f: &mut std::fmt::Formatter<'_>,
 ) -> std::fmt::Result {
-    writeln!(f, "{}: {:?}", Style::new().bold().paint(k), v)
+    writeln!(f, "{}: {v:?}", Style::new().bold().paint(k))
 }
 
 pub struct LookupClient {
@@ -113,13 +113,13 @@ impl std::fmt::Display for Peer {
         if !self.listen_addrs.is_empty() {
             print_key("Listen addresses", f)?;
             for addr in &self.listen_addrs {
-                println!("\t- {:?}", addr);
+                writeln!(f, "\t- {addr:?}")?;
             }
         }
         if !self.protocols.is_empty() {
             print_key("Protocols", f)?;
             for protocol in &self.protocols {
-                println!("\t- {:?}", protocol);
+                writeln!(f, "\t- {protocol:?}")?;
             }
         }
 
@@ -194,7 +194,7 @@ impl LookupClient {
             // Create a Kademlia behaviour.
             let store = MemoryStore::new(local_peer_id);
             let mut kademlia_config = KademliaConfig::default();
-            if let Some(protocol_name) = network.clone().map(|n| n.protocol()).flatten() {
+            if let Some(protocol_name) = network.clone().and_then(|n| n.protocol()) {
                 kademlia_config.set_protocol_names(vec![protocol_name.into_bytes().into()]);
             }
             let kademlia = Kademlia::with_config(local_peer_id, store, kademlia_config);

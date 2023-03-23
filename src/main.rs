@@ -381,6 +381,7 @@ enum Network {
     Kusama,
     Polkadot,
     Ipfs,
+    Ursa,
 }
 
 impl FromStr for Network {
@@ -391,6 +392,7 @@ impl FromStr for Network {
             "kusama" => Ok(Self::Kusama),
             "polkadot" => Ok(Self::Polkadot),
             "ipfs" => Ok(Self::Ipfs),
+            "ursa" => Ok(Self::Ursa),
             n => Err(format!("Network '{}' not supported.", n)),
         }
     }
@@ -433,6 +435,11 @@ impl Network {
                     ("/dnsaddr/bootstrap.libp2p.io".parse().unwrap(), FromStr::from_str("QmcZf59bWwK5XFi76CZX8cbJ4BhTzzA3gU1ZjYZcYW3dwt").unwrap()),
                 ]
             }
+            Network::Ursa => {
+                vec![
+                    ("/dns/bootstrap-node-0.ursa.earth/tcp/6009".parse().unwrap(), FromStr::from_str("12D3KooWDji7xMLia6GAsyr4oiEFD2dd3zSryqNhfxU3Grzs1r9p").unwrap()),
+                ]
+            }
         }
     }
 
@@ -441,6 +448,7 @@ impl Network {
             Network::Kusama => Some("/ksmcc3/kad".to_string()),
             Network::Polkadot => Some("/dot/kad".to_string()),
             Network::Ipfs => None,
+            Network::Ursa => Some("/ursa/kad/0.0.1".to_string()),
         }
     }
 }

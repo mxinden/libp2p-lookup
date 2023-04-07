@@ -206,6 +206,7 @@ impl LookupClient {
             let proto_version = "/substrate/1.0".to_string();
             let identify = identify::Behaviour::new(
                 identify::Config::new(proto_version, local_key.public())
+                    .with_initial_delay(Duration::ZERO)
                     .with_agent_version(user_agent),
             );
 

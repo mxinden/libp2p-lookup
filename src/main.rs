@@ -26,6 +26,7 @@ use log::debug;
 use std::io;
 use std::str::FromStr;
 use std::time::Duration;
+use structopt::clap::arg_enum;
 use structopt::StructOpt;
 use thiserror::Error;
 
@@ -44,7 +45,7 @@ enum Opt {
         #[structopt(long)]
         peer_id: PeerId,
         /// Network of the peer.
-        #[structopt(long)]
+        #[structopt(long, possible_values = &Network::variants(), case_insensitive = true)]
         network: Network,
     },
 }
@@ -377,25 +378,13 @@ struct LookupBehaviour {
     keep_alive: swarm::keep_alive::Behaviour,
 }
 
-#[derive(Debug, Clone)]
-enum Network {
-    Kusama,
-    Polkadot,
-    Ipfs,
-    Ursa,
-}
-
-impl FromStr for Network {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "kusama" => Ok(Self::Kusama),
-            "polkadot" => Ok(Self::Polkadot),
-            "ipfs" => Ok(Self::Ipfs),
-            "ursa" => Ok(Self::Ursa),
-            n => Err(format!("Network '{}' not supported.", n)),
-        }
+arg_enum! {
+    #[derive(Debug, Clone)]
+    enum Network {
+        Kusama,
+        Polkadot,
+        Ipfs,
+        Ursa,
     }
 }
 

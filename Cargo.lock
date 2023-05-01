@@ -1327,7 +1327,7 @@ checksum = "7fc7aa29613bd6a620df431842069224d8bc9011086b1db4c0e0cd47fa03ec9a"
 [[package]]
 name = "libp2p"
 version = "0.51.3"
-source = "git+https://github.com/libp2p/rust-libp2p?branch=master#71805caaec85ccdb5ca43afc3dad3e6b52b38587"
+source = "git+https://github.com/libp2p/rust-libp2p?branch=master#193d2a1a6c366cee0c2f93ada3467ce3c660b29f"
 dependencies = [
  "bytes",
  "futures",
@@ -1358,7 +1358,7 @@ dependencies = [
 [[package]]
 name = "libp2p-allow-block-list"
 version = "0.1.1"
-source = "git+https://github.com/libp2p/rust-libp2p?branch=master#71805caaec85ccdb5ca43afc3dad3e6b52b38587"
+source = "git+https://github.com/libp2p/rust-libp2p?branch=master#193d2a1a6c366cee0c2f93ada3467ce3c660b29f"
 dependencies = [
  "libp2p-core",
  "libp2p-identity",
@@ -1369,7 +1369,7 @@ dependencies = [
 [[package]]
 name = "libp2p-connection-limits"
 version = "0.1.0"
-source = "git+https://github.com/libp2p/rust-libp2p?branch=master#71805caaec85ccdb5ca43afc3dad3e6b52b38587"
+source = "git+https://github.com/libp2p/rust-libp2p?branch=master#193d2a1a6c366cee0c2f93ada3467ce3c660b29f"
 dependencies = [
  "libp2p-core",
  "libp2p-identity",
@@ -1380,7 +1380,7 @@ dependencies = [
 [[package]]
 name = "libp2p-core"
 version = "0.39.2"
-source = "git+https://github.com/libp2p/rust-libp2p?branch=master#71805caaec85ccdb5ca43afc3dad3e6b52b38587"
+source = "git+https://github.com/libp2p/rust-libp2p?branch=master#193d2a1a6c366cee0c2f93ada3467ce3c660b29f"
 dependencies = [
  "either",
  "fnv",
@@ -1407,7 +1407,7 @@ dependencies = [
 [[package]]
 name = "libp2p-dns"
 version = "0.39.0"
-source = "git+https://github.com/libp2p/rust-libp2p?branch=master#71805caaec85ccdb5ca43afc3dad3e6b52b38587"
+source = "git+https://github.com/libp2p/rust-libp2p?branch=master#193d2a1a6c366cee0c2f93ada3467ce3c660b29f"
 dependencies = [
  "async-std-resolver",
  "futures",
@@ -1421,8 +1421,8 @@ dependencies = [
 
 [[package]]
 name = "libp2p-identify"
-version = "0.42.1"
-source = "git+https://github.com/libp2p/rust-libp2p?branch=master#71805caaec85ccdb5ca43afc3dad3e6b52b38587"
+version = "0.42.2"
+source = "git+https://github.com/libp2p/rust-libp2p?branch=master#193d2a1a6c366cee0c2f93ada3467ce3c660b29f"
 dependencies = [
  "asynchronous-codec",
  "either",
@@ -1443,7 +1443,7 @@ dependencies = [
 [[package]]
 name = "libp2p-identity"
 version = "0.1.2"
-source = "git+https://github.com/libp2p/rust-libp2p?branch=master#71805caaec85ccdb5ca43afc3dad3e6b52b38587"
+source = "git+https://github.com/libp2p/rust-libp2p?branch=master#193d2a1a6c366cee0c2f93ada3467ce3c660b29f"
 dependencies = [
  "asn1_der",
  "bs58",
@@ -1466,7 +1466,7 @@ dependencies = [
 [[package]]
 name = "libp2p-kad"
 version = "0.43.3"
-source = "git+https://github.com/libp2p/rust-libp2p?branch=master#71805caaec85ccdb5ca43afc3dad3e6b52b38587"
+source = "git+https://github.com/libp2p/rust-libp2p?branch=master#193d2a1a6c366cee0c2f93ada3467ce3c660b29f"
 dependencies = [
  "arrayvec",
  "asynchronous-codec",
@@ -1507,7 +1507,7 @@ dependencies = [
 [[package]]
 name = "libp2p-mdns"
 version = "0.43.1"
-source = "git+https://github.com/libp2p/rust-libp2p?branch=master#71805caaec85ccdb5ca43afc3dad3e6b52b38587"
+source = "git+https://github.com/libp2p/rust-libp2p?branch=master#193d2a1a6c366cee0c2f93ada3467ce3c660b29f"
 dependencies = [
  "async-io",
  "data-encoding",
@@ -1527,7 +1527,7 @@ dependencies = [
 [[package]]
 name = "libp2p-metrics"
 version = "0.12.0"
-source = "git+https://github.com/libp2p/rust-libp2p?branch=master#71805caaec85ccdb5ca43afc3dad3e6b52b38587"
+source = "git+https://github.com/libp2p/rust-libp2p?branch=master#193d2a1a6c366cee0c2f93ada3467ce3c660b29f"
 dependencies = [
  "libp2p-core",
  "libp2p-identify",
@@ -1542,7 +1542,7 @@ dependencies = [
 [[package]]
 name = "libp2p-mplex"
 version = "0.39.0"
-source = "git+https://github.com/libp2p/rust-libp2p?branch=master#71805caaec85ccdb5ca43afc3dad3e6b52b38587"
+source = "git+https://github.com/libp2p/rust-libp2p?branch=master#193d2a1a6c366cee0c2f93ada3467ce3c660b29f"
 dependencies = [
  "asynchronous-codec",
  "bytes",
@@ -1559,8 +1559,8 @@ dependencies = [
 
 [[package]]
 name = "libp2p-noise"
-version = "0.42.1"
-source = "git+https://github.com/libp2p/rust-libp2p?branch=master#71805caaec85ccdb5ca43afc3dad3e6b52b38587"
+version = "0.42.2"
+source = "git+https://github.com/libp2p/rust-libp2p?branch=master#193d2a1a6c366cee0c2f93ada3467ce3c660b29f"
 dependencies = [
  "bytes",
  "curve25519-dalek 3.2.0",
@@ -1582,7 +1582,7 @@ dependencies = [
 [[package]]
 name = "libp2p-ping"
 version = "0.42.0"
-source = "git+https://github.com/libp2p/rust-libp2p?branch=master#71805caaec85ccdb5ca43afc3dad3e6b52b38587"
+source = "git+https://github.com/libp2p/rust-libp2p?branch=master#193d2a1a6c366cee0c2f93ada3467ce3c660b29f"
 dependencies = [
  "either",
  "futures",
@@ -1599,7 +1599,7 @@ dependencies = [
 [[package]]
 name = "libp2p-quic"
 version = "0.7.0-alpha.3"
-source = "git+https://github.com/libp2p/rust-libp2p?branch=master#71805caaec85ccdb5ca43afc3dad3e6b52b38587"
+source = "git+https://github.com/libp2p/rust-libp2p?branch=master#193d2a1a6c366cee0c2f93ada3467ce3c660b29f"
 dependencies = [
  "async-std",
  "bytes",
@@ -1620,7 +1620,7 @@ dependencies = [
 [[package]]
 name = "libp2p-relay"
 version = "0.15.2"
-source = "git+https://github.com/libp2p/rust-libp2p?branch=master#71805caaec85ccdb5ca43afc3dad3e6b52b38587"
+source = "git+https://github.com/libp2p/rust-libp2p?branch=master#193d2a1a6c366cee0c2f93ada3467ce3c660b29f"
 dependencies = [
  "asynchronous-codec",
  "bytes",
@@ -1643,7 +1643,7 @@ dependencies = [
 [[package]]
 name = "libp2p-swarm"
 version = "0.42.2"
-source = "git+https://github.com/libp2p/rust-libp2p?branch=master#71805caaec85ccdb5ca43afc3dad3e6b52b38587"
+source = "git+https://github.com/libp2p/rust-libp2p?branch=master#193d2a1a6c366cee0c2f93ada3467ce3c660b29f"
 dependencies = [
  "async-std",
  "either",
@@ -1663,7 +1663,7 @@ dependencies = [
 [[package]]
 name = "libp2p-swarm-derive"
 version = "0.32.0"
-source = "git+https://github.com/libp2p/rust-libp2p?branch=master#71805caaec85ccdb5ca43afc3dad3e6b52b38587"
+source = "git+https://github.com/libp2p/rust-libp2p?branch=master#193d2a1a6c366cee0c2f93ada3467ce3c660b29f"
 dependencies = [
  "heck 0.4.1",
  "quote",
@@ -1673,7 +1673,7 @@ dependencies = [
 [[package]]
 name = "libp2p-tcp"
 version = "0.39.0"
-source = "git+https://github.com/libp2p/rust-libp2p?branch=master#71805caaec85ccdb5ca43afc3dad3e6b52b38587"
+source = "git+https://github.com/libp2p/rust-libp2p?branch=master#193d2a1a6c366cee0c2f93ada3467ce3c660b29f"
 dependencies = [
  "async-io",
  "futures",
@@ -1689,7 +1689,7 @@ dependencies = [
 [[package]]
 name = "libp2p-tls"
 version = "0.1.0"
-source = "git+https://github.com/libp2p/rust-libp2p?branch=master#71805caaec85ccdb5ca43afc3dad3e6b52b38587"
+source = "git+https://github.com/libp2p/rust-libp2p?branch=master#193d2a1a6c366cee0c2f93ada3467ce3c660b29f"
 dependencies = [
  "futures",
  "futures-rustls",
@@ -1707,7 +1707,7 @@ dependencies = [
 [[package]]
 name = "libp2p-yamux"
 version = "0.43.0"
-source = "git+https://github.com/libp2p/rust-libp2p?branch=master#71805caaec85ccdb5ca43afc3dad3e6b52b38587"
+source = "git+https://github.com/libp2p/rust-libp2p?branch=master#193d2a1a6c366cee0c2f93ada3467ce3c660b29f"
 dependencies = [
  "futures",
  "libp2p-core",
@@ -1914,7 +1914,7 @@ dependencies = [
 [[package]]
 name = "multistream-select"
 version = "0.12.1"
-source = "git+https://github.com/libp2p/rust-libp2p?branch=master#71805caaec85ccdb5ca43afc3dad3e6b52b38587"
+source = "git+https://github.com/libp2p/rust-libp2p?branch=master#193d2a1a6c366cee0c2f93ada3467ce3c660b29f"
 dependencies = [
  "bytes",
  "futures",
@@ -2336,7 +2336,7 @@ dependencies = [
 [[package]]
 name = "quick-protobuf-codec"
 version = "0.1.0"
-source = "git+https://github.com/libp2p/rust-libp2p?branch=master#71805caaec85ccdb5ca43afc3dad3e6b52b38587"
+source = "git+https://github.com/libp2p/rust-libp2p?branch=master#193d2a1a6c366cee0c2f93ada3467ce3c660b29f"
 dependencies = [
  "asynchronous-codec",
  "bytes",
@@ -2599,7 +2599,7 @@ dependencies = [
 [[package]]
 name = "rw-stream-sink"
 version = "0.3.0"
-source = "git+https://github.com/libp2p/rust-libp2p?branch=master#71805caaec85ccdb5ca43afc3dad3e6b52b38587"
+source = "git+https://github.com/libp2p/rust-libp2p?branch=master#193d2a1a6c366cee0c2f93ada3467ce3c660b29f"
 dependencies = [
  "futures",
  "pin-project",

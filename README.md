@@ -35,8 +35,43 @@ SUBCOMMANDS:
 
 #### Lookup peer by [address][multiaddr]
 
+Generates random keypair with peer ID and connects to the provided address.
+
 ```
 $ libp2p-lookup direct --address /dnsaddr/bootstrap.libp2p.io/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa
+
+Lookup for peer with id PeerId("QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa") succeeded.
+
+Protocol version: "ipfs/0.1.0"
+Agent version: "go-ipfs/0.8.0/48f94e2"
+Observed address: "/ip4/2.200.106.157/tcp/56136"
+Listen addresses:
+        - "/ip4/147.75.77.187/tcp/4001"
+        - "/ip6/2604:1380:0:c100::1/tcp/4001"
+        - "/ip4/147.75.77.187/udp/4001/quic"
+        - "/ip6/2604:1380:0:c100::1/udp/4001/quic"
+Protocols:
+        - "/p2p/id/delta/1.0.0"
+        - "/ipfs/id/1.0.0"
+        - "/ipfs/id/push/1.0.0"
+        - "/ipfs/ping/1.0.0"
+        - "/libp2p/circuit/relay/0.1.0"
+        - "/ipfs/kad/1.0.0"
+        - "/ipfs/lan/kad/1.0.0"
+        - "/libp2p/autonat/1.0.0"
+        - "/ipfs/bitswap/1.2.0"
+        - "/ipfs/bitswap/1.1.0"
+        - "/ipfs/bitswap/1.0.0"
+        - "/ipfs/bitswap"
+        - "/x/"
+```
+
+#### Lookup peer by [address][multiaddr] and keypair file
+
+If your network nodes only allow certain PeerId's to connect, then you can provide your own keypair file (base58 encoded) to authenticate with the node.
+
+```
+$ libp2p-lookup direct --address /dnsaddr/bootstrap.libp2p.io/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa --keypair-path ./path/to/keypair.base58
 
 Lookup for peer with id PeerId("QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa") succeeded.
 

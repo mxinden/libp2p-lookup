@@ -1,4 +1,5 @@
 use ansi_term::Style;
+use base58::FromBase58;
 use futures::executor::block_on;
 use futures::future::{Either, FutureExt, TryFutureExt};
 use futures::stream::StreamExt;
@@ -24,6 +25,7 @@ use libp2p::{
 };
 use log::debug;
 use std::io;
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 use structopt::clap::arg_enum;
@@ -38,6 +40,9 @@ enum Opt {
         /// Address of the peer.
         #[structopt(long)]
         address: Multiaddr,
+        /// Keypair used for authentication.
+        #[structopt(long)]
+        keypair_path: Option<PathBuf>,
     },
     /// Lookup peer by its ID via the Kademlia DHT.
     Dht {
@@ -57,11 +62,11 @@ async fn main() {
 
     let lookup = match opt {
         Opt::Dht { peer_id, network } => {
-            let client = LookupClient::new(Some(network));
+            let client = LookupClient::new(Some(network), None);
             client.lookup_on_dht(peer_id).boxed()
         }
-        Opt::Direct { address } => {
-            let client = LookupClient::new(None);
+        Opt::Direct { address, keypair_path } => {
+            let client = LookupClient::new(None, keypair_path);
             client.lookup_directly(address).boxed()
         }
     };
@@ -129,9 +134,16 @@ impl std::fmt::Display for Peer {
 }
 
 impl LookupClient {
-    fn new(network: Option<Network>) -> Self {
-        // Create a random key for ourselves.
-        let local_key = Keypair::generate_ed25519();
+    fn new(network: Option<Network>, keypair_path: Option<PathBuf>) -> Self {
+
+        let local_key = if let Some(path) = keypair_path {
+            let keys_serialized_58 = std::fs::read_to_string(path).expect("Invalid keypair file path").trim().to_string();
+            Keypair::from_protobuf_encoding(&keys_serialized_58.from_base58().expect("Keypair file is not base58 encoded"))
+                .expect("Invalid keypair file")
+        } else {
+            Keypair::generate_ed25519()
+        };
+
         let local_peer_id = PeerId::from(local_key.public());
 
         println!("Local peer id: {local_peer_id}");

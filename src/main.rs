@@ -2,7 +2,6 @@ use ansi_term::Style;
 use futures::executor::block_on;
 use futures::future::{Either, FutureExt, TryFutureExt};
 use futures::stream::StreamExt;
-use libp2p::core;
 use libp2p::core::muxing::StreamMuxerBox;
 use libp2p::core::transport::OrTransport;
 use libp2p::core::transport::Transport;
@@ -18,10 +17,9 @@ use libp2p::kad::{
 use libp2p::ping;
 use libp2p::relay;
 use libp2p::swarm::{self, SwarmBuilder, SwarmEvent};
-use libp2p::{
-    dns, mplex, noise, swarm::NetworkBehaviour, tcp, yamux, InboundUpgradeExt, Multiaddr,
-    OutboundUpgradeExt, PeerId, Swarm,
-};
+use libp2p::{core, StreamProtocol};
+use libp2p::{dns, noise, swarm::NetworkBehaviour, tcp, yamux, Multiaddr, PeerId, Swarm};
+use libp2p_mplex as mplex;
 use log::debug;
 use std::io;
 use std::str::FromStr;
@@ -102,7 +100,7 @@ struct Peer {
     protocol_version: String,
     agent_version: String,
     listen_addrs: Vec<Multiaddr>,
-    protocols: Vec<String>,
+    protocols: Vec<StreamProtocol>,
     observed_addr: Multiaddr,
 }
 
@@ -120,7 +118,7 @@ impl std::fmt::Display for Peer {
         if !self.protocols.is_empty() {
             print_key("Protocols", f)?;
             for protocol in &self.protocols {
-                writeln!(f, "\t- {protocol:?}")?;
+                writeln!(f, "\t- {protocol}")?;
             }
         }
 
@@ -139,27 +137,19 @@ impl LookupClient {
         let (relay_transport, relay_client) = relay::client::new(local_peer_id);
 
         let transport = {
-            let authentication_config = {
-                let noise_keypair_spec = noise::Keypair::<noise::X25519Spec>::new()
-                    .into_authentic(&local_key)
-                    .unwrap();
-
-                noise::NoiseConfig::xx(noise_keypair_spec).into_authenticated()
-            };
+            let authentication_config = noise::Config::new(&local_key).unwrap();
 
             let multiplexing_config = {
                 let mut mplex_config = mplex::MplexConfig::new();
                 mplex_config.set_max_buffer_behaviour(mplex::MaxBufferBehaviour::Block);
                 mplex_config.set_max_buffer_size(usize::MAX);
 
-                let mut yamux_config = yamux::YamuxConfig::default();
+                let mut yamux_config = yamux::Config::default();
                 // Enable proper flow-control: window updates are only sent when
                 // buffered data has been consumed.
                 yamux_config.set_window_update_mode(yamux::WindowUpdateMode::on_read());
 
                 core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
-                    .map_inbound(core::muxing::StreamMuxerBox::new)
-                    .map_outbound(core::muxing::StreamMuxerBox::new)
             };
 
             let tcp_and_relay_transport = OrTransport::new(
@@ -172,9 +162,9 @@ impl LookupClient {
             .timeout(Duration::from_secs(20));
 
             let quic_transport = {
-                let mut config = libp2p::quic::Config::new(&local_key);
+                let mut config = libp2p_quic::Config::new(&local_key);
                 config.support_draft_29 = true;
-                libp2p::quic::async_std::Transport::new(config)
+                libp2p_quic::async_std::Transport::new(config)
             };
 
             block_on(dns::DnsConfig::system(
@@ -196,7 +186,10 @@ impl LookupClient {
             let store = MemoryStore::new(local_peer_id);
             let mut kademlia_config = KademliaConfig::default();
             if let Some(protocol_name) = network.clone().and_then(|n| n.protocol()) {
-                kademlia_config.set_protocol_names(vec![protocol_name.into_bytes().into()]);
+                kademlia_config
+                    .set_protocol_names(vec![
+                        StreamProtocol::try_from_owned(protocol_name).unwrap()
+                    ]);
             }
             let kademlia = Kademlia::with_config(local_peer_id, store, kademlia_config);
 
@@ -207,7 +200,6 @@ impl LookupClient {
             let proto_version = "/substrate/1.0".to_string();
             let identify = identify::Behaviour::new(
                 identify::Config::new(proto_version, local_key.public())
-                    .with_initial_delay(Duration::ZERO)
                     .with_agent_version(user_agent),
             );
 
@@ -249,6 +241,7 @@ impl LookupClient {
                     num_established,
                     concurrent_dial_errors: _,
                     established_in: _,
+                    connection_id: _,
                 } => {
                     assert_eq!(Into::<u32>::into(num_established), 1);
                     match endpoint {
@@ -263,10 +256,12 @@ impl LookupClient {
                         ConnectedPoint::Listener { .. } => {}
                     }
                 }
-                SwarmEvent::OutgoingConnectionError { peer_id: _, error } => {
-                    return Err(LookupError::FailedToDialPeer { error })
-                }
-                SwarmEvent::Dialing(_) => {}
+                SwarmEvent::OutgoingConnectionError {
+                    peer_id: _,
+                    connection_id: _,
+                    error,
+                } => return Err(LookupError::FailedToDialPeer { error }),
+                SwarmEvent::Dialing { .. } => {}
                 SwarmEvent::Behaviour(_) => {
                     // Ignore any behaviour events until we are connected to the
                     // destination peer. These should be events from the

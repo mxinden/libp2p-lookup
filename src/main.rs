@@ -157,8 +157,8 @@ impl LookupClient {
                 tcp::async_io::Transport::new(tcp::Config::new().port_reuse(true).nodelay(true)),
             )
             .upgrade(upgrade::Version::V1)
-            .authenticate(authentication_config)
-            .multiplex(multiplexing_config)
+            .authenticate(authentication_config.clone())
+            .multiplex(multiplexing_config.clone())
             .timeout(Duration::from_secs(20));
 
             let quic_transport = {
@@ -167,7 +167,7 @@ impl LookupClient {
                 libp2p_quic::async_std::Transport::new(config)
             };
 
-            block_on(dns::DnsConfig::system(
+            let tcp_and_relay_and_quic = block_on(dns::DnsConfig::system(
                 libp2p::core::transport::OrTransport::new(quic_transport, tcp_and_relay_transport),
             ))
             .unwrap()
@@ -175,8 +175,25 @@ impl LookupClient {
                 Either::Left((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
                 Either::Right((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
             })
-            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
-            .boxed()
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, err));
+
+            let websocket = libp2p::websocket::WsConfig::new(
+                block_on(libp2p::dns::DnsConfig::system(
+                    libp2p::tcp::async_io::Transport::new(libp2p::tcp::Config::default()),
+                ))
+                .unwrap(),
+            )
+            .upgrade(upgrade::Version::V1)
+            .authenticate(authentication_config)
+            .multiplex(multiplexing_config)
+            .timeout(Duration::from_secs(20));
+
+            OrTransport::new(websocket, tcp_and_relay_and_quic)
+                .map(|either_output, _| match either_output {
+                    Either::Left((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
+                    Either::Right((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
+                })
+                .boxed()
         };
 
         let behaviour = {

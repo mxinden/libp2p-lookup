@@ -1,6 +1,6 @@
 [package]
 name = "libp2p-lookup"
-version = "0.6.3"
+version = "0.6.4"
 authors = ["Max Inden <mail@max-inden.de>"]
 edition = "2021"
 license = "MIT"
